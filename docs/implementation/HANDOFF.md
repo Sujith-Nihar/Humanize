@@ -416,13 +416,39 @@ against the live repository.
 **No mocked test could have caught this.** The existing scanner tests use `GitRepository.forFixture`
 against a local full clone, where nothing is lazily fetched and no temp packfiles churn.
 
-### Still open, and the next thing to fix
+### Second defect, also fixed: listing sizes fetched the whole repository
 
-`tree()` runs `ls-tree -r -l`. The `-l` flag makes Git resolve **every blob size**, which on a
-`--filter=blob:none` clone triggers a lazy fetch of every blob — defeating the point of cloning
-without blobs. It fails intermittently with a non-zero exit and **empty stderr** (5 consecutive
-failures, then several clean runs). Needs a size strategy that does not fetch content, such as
-`cat-file --batch-check` over candidate paths only.
+`tree()` ran `ls-tree -r -l`. Resolving a size means having the blob, so on a
+`--filter=blob:none` clone the `-l` flag lazily fetched **every blob in the repository** —
+measured 104 KiB growing to **17 MiB** — and the first call against a fresh clone exited
+non-zero, which is what made it look intermittent: once the blobs were local, retries passed.
+
+**Fixed.** Sizes are no longer listed. A size is known only when a blob is actually read, where
+`blob()` applies the cap to that one file. Classification became two-stage as a consequence: the
+runner used to read every blob in order to classify it, which would have re-introduced the same
+mass fetch, so a path-only pass runs first and content is fetched only for files that survive it.
+The entry is then re-classified with its bytes, so a binary or generated file with a reviewable
+path is still caught. `TreeEntry.size` and `InventoryEntry.size` are optional, and `classify` does
+not judge `TOO_LARGE` on an unknown size.
+
+**Measured against the live private repository, after the fix:**
+
+| stage | workspace on disk |
+|---|---|
+| after clone | 0.03 MiB |
+| after `tree()` | 0.03 MiB — no growth, so nothing was fetched to produce the listing |
+| after reading all supported content | 0.12 MiB |
+
+Against 17 MiB before, on a repository whose bulk is audio. The cost now scales with the number of
+content files rather than with repository size. 3 of 3 runs succeeded where 5 of 5 had failed;
+90 tracked blobs, 17 files with content, 122 ContentNodes.
+
+### Still open
+
+Git stderr is discarded entirely by `child.stderr.on('data',()=>{})`. That is deliberate — a
+malicious path or a credential-bearing diagnostic must not leak — and it left **both** defects
+above undiagnosable from the outside, because every failure looked identical. A classified error
+channel that distinguishes causes without echoing raw stderr is the next thing this module needs.
 
 Related and worth treating as its own defect: `child.stderr.on('data',()=>{})` discards Git's stderr
 entirely. That is a deliberate choice so a malicious path or credential-bearing diagnostic cannot

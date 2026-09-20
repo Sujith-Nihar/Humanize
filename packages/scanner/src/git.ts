@@ -6,7 +6,8 @@ import { safePath, abortIfNeeded } from '@humanize/shared';
 import type { Workspace } from './workspace.js';
 
 const flags=['-c','core.hooksPath=/dev/null','-c','credential.helper=','-c','core.fsmonitor=false','-c','protocol.allow=never','-c','protocol.https.allow=always','-c','submodule.recurse=false','-c','diff.external=','-c','core.pager=cat'];
-export interface TreeEntry {path:string;mode:string;type:string;sha:string;size:number;}
+/** `size` is absent until the blob is read: listing sizes would fetch the whole repository. */
+export interface TreeEntry {path:string;mode:string;type:string;sha:string;size?:number|undefined;}
 export interface ChangedFile {oldPath:string|null;newPath:string|null;patch:string;}
 export class GitRepository {
   private constructor(readonly gitDir:string,private readonly workspace:Workspace,private readonly token:string|undefined,private readonly signal:AbortSignal|undefined) {}
@@ -60,13 +61,20 @@ export class GitRepository {
     });
   }
 
+  /**
+   * Lists every tracked entry without their sizes. `ls-tree -l` would report each blob's
+   * size, but resolving a size means having the blob, so on a `--filter=blob:none` clone it
+   * lazily fetches the entire repository — measured here at 104 KiB growing to 17 MiB, with
+   * the first call against a fresh clone failing outright. Size is therefore unknown until a
+   * blob is actually read, where `blob()` enforces the cap for the one file being read.
+   */
   async tree(sha:string):Promise<TreeEntry[]> {
     Sha.parse(sha);
-    const raw=(await this.exec(['ls-tree','-r','-l','-z',sha])).toString('utf8');
+    const raw=(await this.exec(['ls-tree','-r','-z',sha])).toString('utf8');
     return raw.split('\0').filter(Boolean).map(record=>{
       const tab=record.indexOf('\t');const meta=record.slice(0,tab).trim().split(/\s+/);const path=record.slice(tab+1);
-      if(tab<0||meta.length!==4)throw Error('INVALID_TREE');
-      return {mode:meta[0]!,type:meta[1]!,sha:meta[2]!,size:meta[3]==='-'?0:Number(meta[3]),path};
+      if(tab<0||meta.length!==3)throw Error('INVALID_TREE');
+      return {mode:meta[0]!,type:meta[1]!,sha:meta[2]!,path};
     });
   }
   async blob(sha:string,maxBytes:number=LIMITS.fileBytes):Promise<Buffer> {

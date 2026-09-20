@@ -73,3 +73,29 @@ it('reports a genuine quota breach and nothing else',async()=>{
     await expect(over.assertQuota()).rejects.toThrow('WORKSPACE_LIMIT');
   }finally{await rm(path,{recursive:true,force:true});}
 });
+
+it('lists a tree without resolving blob sizes',async()=>{
+  // `ls-tree -l` resolves every blob size, and resolving a size means having the blob, so on
+  // a blobless clone it fetches the entire repository. Listing must not depend on content.
+  const path=await mkdtemp(join(tmpdir(),'tree-'));
+  try{
+    const git=(...a:string[])=>exec('git',['-C',path,...a]);
+    await git('init','-q');await git('config','user.email','t@example.com');await git('config','user.name','T');
+    await writeFile(join(path,'page.md'),'Some copy\n');
+    await writeFile(join(path,'large.bin'),Buffer.alloc(4096));
+    await git('add','.');await git('commit','-q','-m','init');
+    const head=(await git('rev-parse','HEAD')).stdout.trim();
+    await withWorkspace(async w=>{
+      const repo=GitRepository.forFixture(join(path,'.git'),w);
+      const tree=await repo.tree(head);
+      expect(tree.map(e=>e.path).sort()).toEqual(['large.bin','page.md']);
+      // No size is reported, so nothing had to be fetched to produce the listing.
+      expect(tree.every(e=>e.size===undefined)).toBe(true);
+      // An unknown size is not a reason to call a file too large.
+      expect(classify(tree.find(e=>e.path==='page.md')!,undefined).classification).toBe('SUPPORTED_CONTENT');
+      // The cap still applies where it can be enforced: when the blob is actually read.
+      const big=tree.find(e=>e.path==='large.bin')!;
+      await expect(repo.blob(big.sha,1024)).rejects.toThrow('FILE_TOO_LARGE');
+    });
+  }finally{await rm(path,{recursive:true,force:true});}
+});

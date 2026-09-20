@@ -61,10 +61,17 @@ export async function executeReview(
     for(const entry of tree){
       signal?.throwIfAborted();
       if(entry.type!=='blob')continue;
-      // Every tracked file is classified; only supported content is ever parsed.
-      const bytes=entry.size<=(config.scan?.maxFileBytes??LIMITS.fileBytes)?await repository.blob(entry.sha).catch(()=>undefined):undefined;
-      const inventory=classify(entry,bytes,config.scan??{});
-      if(inventory.classification!=='SUPPORTED_CONTENT'||!bytes)continue;
+      // Every tracked file is classified, but classification happens on the path first:
+      // reading a blob in order to classify it would pull every file in the repository out
+      // of the blobless clone, including the binaries the classifier is about to reject.
+      if(classify(entry,undefined,config.scan??{}).classification!=='SUPPORTED_CONTENT')continue;
+      // Only now is content fetched, and `blob` applies the size cap to this one file.
+      const bytes=await repository.blob(entry.sha,config.scan?.maxFileBytes??LIMITS.fileBytes).catch(()=>undefined);
+      if(!bytes){diagnostics.set('FILE_UNREADABLE',(diagnostics.get('FILE_UNREADABLE')??0)+1);continue;}
+      // Re-classified with content, which is what detects a binary or generated file whose
+      // path looked reviewable.
+      const inventory=classify({...entry,size:bytes.byteLength},bytes,config.scan??{});
+      if(inventory.classification!=='SUPPORTED_CONTENT')continue;
       inspectedFiles++;
       const text=bytes.toString('utf8');
       const extraction=extract({repositoryId:snapshot.repositoryId,commitSha:snapshot.headSha,blobSha:entry.sha,filePath:entry.path,source:text});
