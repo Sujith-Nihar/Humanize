@@ -1,7 +1,7 @@
-import { planPublication } from '@humanize/review';
+import { findingsFromResult,planPublication } from '@humanize/review';
 import { ReviewPublisher,StaleHeadError,buildCheck,buildReview } from '@humanize/github';
 import type { GitHubTransport,PublishOutcome } from '@humanize/github';
-import type { ContentNode,DiffMap,ReviewSnapshot,RunnerResult,ValidatedFinding } from '@humanize/domain';
+import type { DiffMap,ReviewSnapshot,RunnerResult } from '@humanize/domain';
 
 export interface PublishPorts {
   /** A transport authorised for this installation; the control plane alone holds write access. */
@@ -9,28 +9,6 @@ export interface PublishPorts {
   diff(snapshot:ReviewSnapshot):Promise<DiffMap>;
 }
 export interface PublishRequest { snapshot:ReviewSnapshot; result:RunnerResult; maxSubjectiveInline?:number; }
-
-/**
- * Rebuilds findings from an accepted runner result. The runner is untrusted, so a candidate is
- * reconstructed only from content the control plane received and re-checked: the quotation must
- * still be present in the node it names, and the node must belong to the reviewed commit.
- */
-export function findingsFromResult(result:RunnerResult,snapshot:ReviewSnapshot):ValidatedFinding[] {
-  const nodes=new Map<string,ContentNode>(result.nodes.map(node=>[node.id,node]));
-  const evidence=new Map(result.evidence.map(record=>[record.id,record]));
-  const findings:ValidatedFinding[]=[];
-  for(const candidate of result.candidates){
-    const node=nodes.get(candidate.nodeId);
-    if(!node||node.commitSha!==snapshot.headSha||!node.text.includes(candidate.exactText))continue;
-    findings.push({
-      ...candidate,node,
-      fingerprint:`${node.stableKey}:${candidate.category}:${candidate.exactText}`,
-      evidenceRecords:candidate.evidence.map(reference=>evidence.get(reference.id)).filter((record):record is NonNullable<typeof record>=>record!==undefined),
-      deterministic:false,blocking:false,verificationConfidence:candidate.confidence,
-    });
-  }
-  return findings;
-}
 
 /**
  * Publishes an accepted result. Only the control plane reaches GitHub: the runner holds a

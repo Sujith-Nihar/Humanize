@@ -47,11 +47,27 @@ const controller=new AbortController();
 const stop=()=>controller.abort(new Error('SHUTDOWN'));
 process.once('SIGTERM',stop);process.once('SIGINT',stop);
 
-await pollForWork(client,async({lease,credential:jobCredential,signal})=>
-  executeReview(lease,jobCredential,{provider},{enabled,workspaceRoot},signal),
-{
+await pollForWork(client,async({lease,credential:jobCredential,signal})=>{
+  // An operator needs to see that work was taken, not infer it from silence.
+  console.log(JSON.stringify({event:'lease.claimed',runId:lease.runId,fence:lease.fence,expiresInMs:lease.expiresInMs}));
+  const started=Date.now();
+  const report=await executeReview(lease,jobCredential,{provider},{enabled,workspaceRoot},signal);
+  // The codes, not just how many: a review that reports nothing must say why it reported
+  // nothing, or a suppressed finding and an absent one look identical to an operator.
+  console.log(JSON.stringify({event:'review.executed',runId:lease.runId,durationMs:Date.now()-started,
+    inspectedFiles:report.inspectedFiles,extractedNodes:report.extractedNodes,changedNodes:report.changedNodes,
+    candidates:report.result.candidates.length,
+    diagnostics:Object.fromEntries(report.result.diagnostics.map(d=>[d.code,d.count]))}));
+  return report;
+},{
   capabilities:{protocolVersion:1,schemaVersion:'humanize-runner-v1',version,models,labels:[],localOnly:true},
   signal:controller.signal,
+  // Every outcome is reported. A lease that is lost or fails must not look like idleness.
+  onOutcome:outcome=>{console.log(JSON.stringify({event:'lease.outcome',status:outcome.status,
+    ...(outcome.status==='failed'?{retryable:outcome.retryable}:{})}));},
   // The control plane validates and publishes; the runner only reports what it found.
-  report:async value=>{await client.uploadResult((value as {result:RunnerResult}).result);},
+  report:async value=>{
+    const {duplicate}=await client.uploadResult((value as {result:RunnerResult}).result);
+    console.log(JSON.stringify({event:'result.uploaded',duplicate}));
+  },
 });

@@ -5,3 +5,4 @@ export { reviewNodes,DEFAULT_CONFIDENCE } from './pipeline.js';
 export type { NodeFailure,NodeSignal,ReviewOptions,ReviewOutcome,ReviewPorts,SuppressedCandidate,SuppressionReason } from './pipeline.js';
 export { planPublication,scoreFinding } from './ranking.js';
 export type { PublicationPlan,RankedFinding,RankingOptions } from './ranking.js';
+export { findingsFromResult } from './results.js';

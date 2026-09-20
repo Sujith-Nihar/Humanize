@@ -1,7 +1,8 @@
 import { expect,it,vi } from 'vitest';
 import { REVIEW_MARKER } from '@humanize/github';
 import type { ContentNode,DiffMap,ReviewSnapshot,RunnerResult } from '@humanize/domain';
-import { findingsFromResult,publishResult } from './src/publish.js';
+import { publishResult } from './src/publish.js';
+import { findingsFromResult } from '@humanize/review';
 
 const headSha='b'.repeat(40);
 const text='Unlock unprecedented potential with our cutting-edge platform.';
