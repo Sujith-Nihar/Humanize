@@ -1,0 +1,11 @@
+# Threat model and verification
+
+Untrusted inputs include all source/PR text, config, webhooks before HMAC, model output and authenticated runner results. Repository text reaches a model fenced by a per-review unguessable marker, with any occurrence of that marker stripped from the content so it cannot close its own fence, and the system prompt declares the boundary before any content is shown. Model output passes a deterministic gate before it can become a finding: the candidate must name the reviewed node, quote text that genuinely occurs in it, cite only supplied evidence and stay within the routed categories, and source coordinates are attached from the node rather than taken from the model. Assets are tenant source, secrets, publication authority, data-retention promises and availability.
+
+Restricted Git uses allowlisted commands/arguments without a shell, approved HTTPS hosts, clean configuration, disabled hooks/helpers/external diff/textconv/filters/LFS/submodules. Prefer no checkout and blob reads. Do not follow symlinks or load executable customer parser configs. Parser workers are killable, resource-bounded and receive no secrets/network tools.
+
+Prompt content is evidence only; no credentials or arbitrary shell/tools. Bounded expansion accepts structured read-only queries. Validate evidence and source independently. Escape user/model text and suggestion fences. Cloud endpoint redirects cannot escape allowlists.
+
+Tenant scope is enforced server-side and by composite DB relationships. Fresh GitHub repository admin checks govern repository writes. Organization writes require admin on every enabled repository, at least one repository, and serialization against enabled-set changes. GitHub App installation itself is not organization ownership.
+
+Secrets use authenticated encryption, versioned deployment keys outside DB, tenant-bound associated data and rotation/revocation. Credential forms are one-way ingress; no saved-secret readback/storage/analytics. CI tests authorization bypass, prompt injection, fabricated evidence, unsafe patches, parser bombs, malicious Git configuration, endpoint misuse and logs/error leakage. No release with unresolved critical/high boundary failures.
