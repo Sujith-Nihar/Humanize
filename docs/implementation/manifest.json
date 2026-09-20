@@ -183,9 +183,9 @@
           ],
           "acceptance": "Hooks, filters, protocols and argument injection cannot execute or leak secrets",
           "status": "in_progress",
-          "evidence": "Restricted Git wrapper, ephemeral workspace lifecycle, inventory classification and merge-base diff geometry implemented with initial hostile-Git and geometry fixtures. Latest pnpm check passed documentation, package boundaries, TypeScript, lint and 24 unit tests across 9 files (2026-09-17).",
-          "nextAction": "Complete live GitHub acquisition, missing-history and exhaustive security/resource/cleanup cases; no full scanner acceptance claimed.",
-          "updatedAt": "2026-09-17T20:00:09.487337+00:00"
+          "evidence": "Restricted Git acquisition ran against a REAL private GitHub repository for the first time, authenticated with an installation token minted by GitHubTokenBroker. Proven live: the repository refuses an anonymous clone once credential helpers are disabled exactly as git.ts disables them, so the credential path is genuinely exercised rather than bypassed by public access; GitRepository.acquire then clones it successfully (7 of 7 clone-only runs). Defect found and fixed in the quota monitor: it mapped every assertQuota failure to WORKSPACE_LIMIT and SIGKILLed Git, so a transient ENOENT from the measurement corrupted the object database. The monitor now kills only on a genuine quota breach. pnpm check passed with 219 unit tests across 33 files.",
+          "nextAction": "SEPARATE DEFECT, OPEN: tree() runs ls-tree -r -l, and -l forces Git to resolve every blob size. On a --filter=blob:none clone that triggers a lazy fetch of every blob, which defeats the point of the blobless clone and fails intermittently with a non-zero exit and EMPTY stderr (observed failing on 5 consecutive runs, then succeeding on others). Needs a size strategy that does not fetch blob content, for example cat-file --batch-check over candidate paths only. Related: stderr is discarded entirely so an operator cannot diagnose a Git failure at all; a classified error channel is needed that never echoes raw stderr. Also still absent: live missing-history handling and exhaustive argument-injection cases.",
+          "updatedAt": "2026-09-20T21:31:27.714356+00:00"
         },
         {
           "id": "P1-S02-T02",
@@ -198,9 +198,9 @@
           ],
           "acceptance": "Cleanup on success, error, cancellation, timeout and orphan recovery",
           "status": "in_progress",
-          "evidence": "Restricted Git wrapper, ephemeral workspace lifecycle, inventory classification and merge-base diff geometry implemented with initial hostile-Git and geometry fixtures. Latest pnpm check passed documentation, package boundaries, TypeScript, lint and 24 unit tests across 9 files (2026-09-17).",
-          "nextAction": "Complete live GitHub acquisition, missing-history and exhaustive security/resource/cleanup cases; no full scanner acceptance claimed.",
-          "updatedAt": "2026-09-17T20:00:09.513771+00:00"
+          "evidence": "First live acquisition against a real private GitHub repository exposed a defect in directoryBytes. It walked the workspace while Git was writing lazy-fetch packfiles, so an entry named by readdir was routinely gone before lstat reached it; measured ENOENT on objects/pack/tmp_pack_k3U8yJ and objects/pack/tmp_idx_UBKkKk. The quota monitor in git.ts converted ANY assertQuota failure into WORKSPACE_LIMIT and SIGKILLed Git mid-write, which left a commit graph referencing objects absent from the object database, so a later command died with \"This is probably due to repo corruption\". Fixed: directoryBytes skips vanished entries (ENOENT, ENOTDIR) rather than throwing, since a file that no longer exists contributes no bytes. Regression value proven: reverting directoryBytes makes the new churn test fail with exactly that ENOENT, and the fix makes it pass. A second test asserts a genuine quota breach is still reported. Live loop against the private repository went from 5 of 5 failing to zero WORKSPACE_LIMIT failures. pnpm check passed: 219 unit tests across 33 files, plus docs, boundaries, typecheck and lint.",
+          "nextAction": "Workspace cleanup on cancellation, timeout and orphan recovery still lack live coverage. The quota check is also unbounded in cost: it rescans the whole workspace every 500 milliseconds regardless of size, which will not hold for a large repository and should become incremental or sampled.",
+          "updatedAt": "2026-09-20T21:31:14.978394+00:00"
         },
         {
           "id": "P1-S02-T03",
@@ -573,9 +573,9 @@
           ],
           "acceptance": "Live test App proves repository and permission scope",
           "status": "in_progress",
-          "evidence": "HMAC verification, minimized webhook metadata, event-intent classifier, scoped token broker and Fastify durable ingestion implemented. API/signature tests included in 24 passing unit tests. Latest pnpm check passed documentation, package boundaries, TypeScript, lint and 24 unit tests across 9 files (2026-09-17).",
-          "nextAction": "Implement asynchronous GitHub reconciliation, debounce and failed-delivery recovery scheduling; verify live App permissions and complete event lifecycle. Publishing transport task T06 remains planned.",
-          "updatedAt": "2026-09-17T20:00:10.058162+00:00"
+          "evidence": "App token broker verified against LIVE GitHub for the first time. GitHub App humanize-superhuman (id 5013754) authenticates with its private key; GET /app reports permissions checks=write, contents=read, metadata=read, pull_requests=write, so Contents stays read-only and INV-011 holds in the real App. GitHubTokenBroker.scopedToken minted a real installation access token for installation 163328826, and GET /installation/repositories confirms it is scoped to exactly ONE repository. Read and publish roles return distinct tokens, and the cache returns the same read token within its window. The previous record that no real installation access token had ever been minted is now superseded.",
+          "nextAction": "Not yet proven live: that a read-scoped token is actually refused write access. The negative test issues a write request to GitHub and was deliberately not run without explicit approval. Token expiry, revocation on installation suspension, and cache eviction across the one-hour lifetime also remain unverified against the live App.",
+          "updatedAt": "2026-09-20T21:31:46.144836+00:00"
         },
         {
           "id": "P1-S06-T02",
@@ -605,9 +605,9 @@
           ],
           "acceptance": "Atomic enqueue and replay/recovery produce one intended run",
           "status": "in_progress",
-          "evidence": "HMAC verification, minimized webhook metadata, event-intent classifier, scoped token broker and Fastify durable ingestion implemented. API/signature tests included in 24 passing unit tests. Latest pnpm check passed documentation, package boundaries, TypeScript, lint and 24 unit tests across 9 files (2026-09-17).",
-          "nextAction": "Implement asynchronous GitHub reconciliation, debounce and failed-delivery recovery scheduling; verify live App permissions and complete event lifecycle. Publishing transport task T06 remains planned.",
-          "updatedAt": "2026-09-17T20:00:10.110772+00:00"
+          "evidence": "Delivery ingestion and deduplication proven END TO END against live GitHub. A real installation.created delivery was redelivered through GitHubTokenBroker.redeliver, travelled GitHub to smee to the Fastify endpoint, passed raw-body HMAC verification, normalized, and committed as one transaction: webhook_deliveries row plus a github.event job in pg-boss. INV-009 proven live: redelivering the SAME delivery returned 202 again and left exactly one delivery row and one job. The worker then consumed the job and recorded github_installations 163328826 with suspended=false and deleted=false, and the job reached state completed. Chain verified: GitHub to smee to HMAC to normalize to Postgres to pg-boss to worker to durable state.",
+          "nextAction": "Scheduled failed-delivery recovery is still absent: redelivery was driven manually here, and nothing periodically reconciles missed deliveries using the App deliveries API. Debounce of synchronize events and lifecycle cancellation also remain unimplemented.",
+          "updatedAt": "2026-09-20T21:31:46.176644+00:00"
         },
         {
           "id": "P1-S06-T04",

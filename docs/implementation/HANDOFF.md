@@ -367,6 +367,84 @@ A local Ollama server became available, so the provider and review stacks were r
 
 **This is a smoke test, not a quality measurement.** One small model, five hand-written cases. P1-S08-T05 must measure precision against labelled content. Two quality issues already observed for it: overlapping findings for a sentence and a sub-phrase of it (ranking and dedup in P1-S13 must merge these), and candidates proposed for acceptable copy that only the verifier removes.
 
+## Session of 2026-09-20: first live GitHub, and a real acquisition defect
+
+GitHub App credentials arrived, so the whole ingestion path ran against real infrastructure
+for the first time. **The claim elsewhere in this file that no real installation access token
+has ever been minted is now superseded.**
+
+**Live and verified.** App `humanize-superhuman` (id 5013754), installation 163328826 on one
+private repository. `GET /app` reports `contents=read`, so INV-011 holds in the real App and not
+only in tests. `GitHubTokenBroker.scopedToken` minted a genuine installation token that GitHub
+confirms is scoped to exactly one repository; read and publish roles differ; the cache reuses the
+read token. The private repository **refuses an anonymous clone** once credential helpers are
+disabled the way `git.ts` disables them, which is what makes the credential path genuinely tested
+rather than bypassed by public access — the reason a public repository is not acceptable evidence
+for S08-T06.
+
+**Ingestion proven end to end:** a real delivery travelled GitHub to smee to Fastify, passed
+raw-body HMAC verification, committed one `webhook_deliveries` row and one `github.event` job in a
+single transaction, and the worker reconciled it into `github_installations`. Redelivering the same
+delivery returned 202 and left exactly one row and one job, so **INV-009 is proven live**.
+
+### Defect found and fixed: the quota check killed Git and corrupted the repository
+
+Acquisition failed **5 of 5** runs against the real repository, with two different errors, and the
+cause was one bug wearing two masks.
+
+`directoryBytes` walks the workspace every 500 ms. Git creates and renames `tmp_pack_*` and
+`tmp_idx_*` continuously during a lazy fetch, so an entry named by `readdir` is routinely gone
+before `lstat` reaches it. Measured: `ENOENT ... objects/pack/tmp_pack_k3U8yJ`. The monitor in
+`git.ts` then did this:
+
+```js
+void this.workspace.assertQuota().catch(() => kill(new Error('WORKSPACE_LIMIT')))
+```
+
+Every failure of the *measurement* became a quota breach and **SIGKILLed Git mid-write**. Sometimes
+that surfaced as a bogus `WORKSPACE_LIMIT` on a repository nowhere near the 4 GiB quota; sometimes
+the kill left a commit graph referencing objects absent from the object database and the *next*
+command died with `fatal: ... This is probably due to repo corruption`, reported as the opaque
+`GIT_COMMAND_FAILED`.
+
+**Fixed.** `directoryBytes` skips vanished entries — a file that no longer exists contributes no
+bytes — and the monitor kills only on a genuine quota breach. **Regression value proven:** reverting
+`directoryBytes` makes the new churn test fail with exactly that `ENOENT`; the fix makes it pass. A
+second test asserts a real quota breach is still reported. `WORKSPACE_LIMIT` failures went to zero
+against the live repository.
+
+**No mocked test could have caught this.** The existing scanner tests use `GitRepository.forFixture`
+against a local full clone, where nothing is lazily fetched and no temp packfiles churn.
+
+### Still open, and the next thing to fix
+
+`tree()` runs `ls-tree -r -l`. The `-l` flag makes Git resolve **every blob size**, which on a
+`--filter=blob:none` clone triggers a lazy fetch of every blob — defeating the point of cloning
+without blobs. It fails intermittently with a non-zero exit and **empty stderr** (5 consecutive
+failures, then several clean runs). Needs a size strategy that does not fetch content, such as
+`cat-file --batch-check` over candidate paths only.
+
+Related and worth treating as its own defect: `child.stderr.on('data',()=>{})` discards Git's stderr
+entirely. That is a deliberate choice so a malicious path or credential-bearing diagnostic cannot
+leak, and it made this bug undiagnosable from the outside — every failure looked identical. A
+classified error channel is needed that distinguishes causes without echoing raw stderr.
+
+### Environment notes for whoever continues
+
+- `.env` is **not loaded by anything**: no `dotenv`, no `--env-file`. Use
+  `source ~/.config/humanize/dev-env.sh` (outside the repo, mode 600), which exports `.env` and
+  reads the App private key from `~/.config/humanize/github-app.pem`. The key is deliberately kept
+  out of the repository, which is public.
+- Corepack refuses to run — stale bundled signing keys. Install the pinned pnpm with
+  `npm i -g pnpm@10.34.5`.
+- `node_modules` held a corrupt `@rolldown/binding-darwin-arm64`: manifest present, 16 MB `.node`
+  binary absent, so vitest could not start. `pnpm install` reported "already up to date"; only
+  deleting the package directory and running `pnpm install --force` fixed it.
+- Verified this session: `pnpm check` green with **219 unit tests across 33 files**, and
+  `pnpm test:integration` green with **70 tests across 11 files** against PostgreSQL 18.6.
+- Live target is `Sujith-Nihar/neurorhythms-ai-sound-36293`, now private. Webhook relay is a smee
+  channel; the forwarder must be running for deliveries to arrive locally.
+
 ## Verified results and unverified work
 
 Verified on 2026-09-17 in this session:
