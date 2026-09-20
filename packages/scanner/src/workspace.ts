@@ -4,13 +4,29 @@ import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { LIMITS } from '@humanize/domain';
 
+/** A path that vanished between listing and measuring contributes nothing. */
+const vanished=(error:unknown):boolean=>['ENOENT','ENOTDIR'].includes((error as NodeJS.ErrnoException).code??'');
+
+/**
+ * Measures a directory while it is being written to. Git creates and renames temporary
+ * pack and index files continuously during a fetch, so an entry named by readdir is
+ * routinely gone by the time lstat reaches it. Such an entry is skipped rather than
+ * thrown, because treating a disappearing temp file as a measurement failure kills the
+ * very Git process that is writing it.
+ */
 export async function directoryBytes(directory:string):Promise<number> {
   let bytes=0;
-  for(const entry of await readdir(directory,{withFileTypes:true})) {
+  let entries;
+  try{entries=await readdir(directory,{withFileTypes:true});}
+  catch(error){if(vanished(error))return 0;throw error;}
+  for(const entry of entries) {
     const path=join(directory,entry.name);
     if(entry.isSymbolicLink()) continue;
     if(entry.isDirectory()) bytes+=await directoryBytes(path);
-    else bytes+=(await lstat(path)).size;
+    else {
+      try{bytes+=(await lstat(path)).size;}
+      catch(error){if(!vanished(error))throw error;}
+    }
   }
   return bytes;
 }

@@ -47,7 +47,11 @@ export class GitRepository {
       this.signal?.addEventListener('abort',abort,{once:true});
       const timeout=setTimeout(()=>kill(new Error('GIT_TIMEOUT')),120000);
       let checking=false;
-      const monitor=setInterval(()=>{if(checking)return;checking=true;void this.workspace.assertQuota().catch(()=>kill(new Error('WORKSPACE_LIMIT'))).finally(()=>{checking=false;});},500);
+      // Only a real quota breach may kill the process. Any other failure of the measurement
+      // is a fault in the check, not in the job it polices, and must never SIGKILL Git
+      // mid-write: that leaves a commit graph referencing objects absent from the object
+      // database, and every later command fails as repository corruption.
+      const monitor=setInterval(()=>{if(checking)return;checking=true;void this.workspace.assertQuota().catch((error:unknown)=>{if(error instanceof Error&&error.message==='WORKSPACE_LIMIT')kill(error);}).finally(()=>{checking=false;});},500);
       child.stdout.on('data',(chunk:Buffer)=>{size+=chunk.length;if(size>maxBytes)kill(new Error('GIT_OUTPUT_LIMIT'));else chunks.push(chunk);});
       // Never expose stderr: Git may echo a malicious path or a credential-bearing diagnostic.
       child.stderr.on('data',()=>{});
