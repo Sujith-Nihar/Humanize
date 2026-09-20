@@ -1,0 +1,19 @@
+{
+  "name": "@humanize/evals",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@humanize/domain": "workspace:*",
+    "@humanize/extractors": "workspace:*",
+    "@humanize/providers": "workspace:*",
+    "@humanize/retrieval": "workspace:*",
+    "@humanize/review": "workspace:*",
+    "@humanize/rules": "workspace:*",
+    "@humanize/runner": "workspace:*",
+    "@humanize/scanner": "workspace:*",
+    "@humanize/suggestions": "workspace:*",
+    "@humanize/telemetry": "workspace:*",
+    "@humanize/testing": "workspace:*"
+  }
+}
