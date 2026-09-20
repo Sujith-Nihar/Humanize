@@ -1,0 +1,28 @@
+# Reference deployment for the Humanize self-hosted runner.
+services:
+  runner:
+    image: humanize/runner:latest
+    build:
+      context: ../..
+      dockerfile: docker/runner/Dockerfile
+    restart: unless-stopped
+    environment:
+      HUMANIZE_CONTROL_PLANE_URL: ${HUMANIZE_CONTROL_PLANE_URL:?set the control plane URL}
+      HUMANIZE_RUNNER_TOKEN: ${HUMANIZE_RUNNER_TOKEN:?set the runner credential}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+    # The container cannot write outside its workspace, cannot gain privileges, and holds
+    # no Linux capabilities: it clones repositories and calls a local model, nothing more.
+    read_only: true
+    security_opt: ['no-new-privileges:true']
+    cap_drop: ['ALL']
+    # Repository content lives in memory and disappears with the container. A tmpfs mount
+    # is owned by root unless told otherwise, which would leave the unprivileged runner
+    # unable to create a workspace at all, so the mount carries its uid and gid.
+    tmpfs:
+      - /workspace:rw,noexec,nosuid,size=4g,uid=10001,gid=10001
+      - /tmp:rw,noexec,nosuid,size=256m,uid=10001,gid=10001
+    # No ports are published. The runner dials out; nothing dials in.
+    extra_hosts: ['host.docker.internal:host-gateway']
+    logging:
+      driver: json-file
+      options: { max-size: '10m', max-file: '3' }
