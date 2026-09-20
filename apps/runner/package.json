@@ -1,0 +1,27 @@
+{
+  "name": "@humanize/runner",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "development": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@humanize/config": "workspace:*",
+    "@humanize/domain": "workspace:*",
+    "@humanize/extractors": "workspace:*",
+    "@humanize/github": "workspace:*",
+    "@humanize/providers": "workspace:*",
+    "@humanize/retrieval": "workspace:*",
+    "@humanize/review": "workspace:*",
+    "@humanize/rules": "workspace:*",
+    "@humanize/scanner": "workspace:*",
+    "@humanize/shared": "workspace:*",
+    "@humanize/suggestions": "workspace:*",
+    "@humanize/telemetry": "workspace:*"
+  }
+}
