@@ -1,0 +1,42 @@
+{
+  "name": "humanize",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "packageManager": "pnpm@10.34.5",
+  "engines": {
+    "node": ">=22.12.0 <23 || >=24 <25"
+  },
+  "scripts": {
+    "check": "pnpm docs:check && pnpm boundaries && pnpm typecheck && pnpm lint && pnpm test",
+    "docs:check": "python3 scripts/check_docs.py",
+    "boundaries": "node scripts/check-boundaries.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build": "tsc -b tsconfig.build.json",
+    "lint": "eslint packages apps scripts --no-warn-ignored",
+    "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:live": "vitest run --config vitest.live.config.ts",
+    "dev:api": "tsx --conditions=development apps/api/src/main.ts",
+    "dev:worker": "tsx --conditions=development apps/worker/src/main.ts",
+    "dev:runner": "tsx --conditions=development apps/runner/src/main.ts",
+    "dev:dashboard": "pnpm --filter @humanize/dashboard dev",
+    "db:migrate": "tsx --conditions=development packages/db/src/migrate.ts"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "vitest": "5.0.1",
+    "tsx": "4.23.13",
+    "eslint": "10.10.0",
+    "typescript-eslint": "8.70.0",
+    "@eslint/js": "10.0.1",
+    "@types/node": "22.20.3",
+    "@types/pg": "8.23.1",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@types/babel__traverse": "7.28.0",
+    "@types/picomatch": "4.0.3",
+    "@playwright/test": "1.63.0",
+    "drizzle-kit": "0.31.10"
+  }
+}
