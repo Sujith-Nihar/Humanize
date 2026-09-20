@@ -1,0 +1,29 @@
+name: CI
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18.6
+        env:
+          POSTGRES_USER: humanize
+          POSTGRES_PASSWORD: test-only
+          POSTGRES_DB: humanize_test
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U humanize" --health-interval 5s --health-timeout 3s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - run: pnpm build
+      - run: pnpm test:integration
+        env:
+          HUMANIZE_TEST_DATABASE_URL: postgres://humanize:test-only@127.0.0.1:5432/humanize_test
