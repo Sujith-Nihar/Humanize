@@ -9,7 +9,7 @@ import { fingerprint } from '@humanize/shared';
 /** Reads a file from the trusted base commit. Never the head: a pull request must not
  *  weaken the review that judges it (ADR-027). */
 export interface TrustedFileSource {
-  read(args:{installationId:number;owner:string;name:string;ref:string;path:string}):Promise<{content:string;sha:string}|null>;
+  read(args:{installationId:number;githubRepositoryId:number;owner:string;name:string;ref:string;path:string}):Promise<{content:string;sha:string}|null>;
 }
 export interface ReviewScheduler { enqueue(payload:JobPayload):Promise<void>; }
 export interface EventContext {
@@ -94,7 +94,7 @@ export async function handleGitHubEvent(raw:GitHubEvent,context:EventContext):Pr
 
   // Configuration is read from the base commit, so the pull request cannot change the rules
   // it will be judged by (ADR-027). A missing file is normal and means administrator defaults.
-  const file=await context.config.read({installationId:event.installationId,owner:event.repository.owner,name:event.repository.name,ref:event.pull.baseRef,path:CONFIG_PATH});
+  const file=await context.config.read({installationId:event.installationId,githubRepositoryId:event.repository.githubId,owner:event.repository.owner,name:event.repository.name,ref:event.pull.baseRef,path:CONFIG_PATH});
   const loaded=file?loadRepositoryConfig(file.content):{config:null,violations:[]};
   const policy=await resolvePolicy(record.organization_id,context);
   if(!policy)return {action:'ignored',reason:'no_organization_policy'};

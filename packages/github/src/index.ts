@@ -1,6 +1,8 @@
 import type { FileDiff } from '@humanize/domain';
 export { verifyWebhook,normalizeWebhook,eventIntent } from './webhook.js';
 export { GitHubTokenBroker,githubClient } from './client.js';
+export { GitHubFileSource,MAX_TRUSTED_FILE_BYTES } from './files.js';
+export type { TrustedFileRequest } from './files.js';
 
 export function parseFileDiff(oldPath:string|null,newPath:string|null,patch:string):FileDiff {
   const result:FileDiff={oldPath,newPath,addedLines:[],deletedLines:[],hunks:[]};

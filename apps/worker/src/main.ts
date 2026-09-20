@@ -1,6 +1,7 @@
-import { Database,PublicationStore,RunStore,migrate } from '@humanize/db';
+import { AdministrationStore,Database,PublicationStore,RunStore,migrate } from '@humanize/db';
 import { JobQueue } from '@humanize/queue';
 import { GitHubEventSchema } from '@humanize/domain';
+import { GitHubFileSource,GitHubTokenBroker } from '@humanize/github';
 import { handleGitHubEvent } from './handlers.js';
 import { publishReview } from './publish-worker.js';
 
@@ -13,6 +14,15 @@ const queue=new JobQueue(url);
 await queue.start();
 const publications=new PublicationStore(db);
 const runs=new RunStore(db);
+const administration=new AdministrationStore(db);
+
+// The App credentials are optional so the worker still runs in a development environment
+// without them. What they gate is explicit rather than silent: with no credentials the
+// trusted configuration cannot be read, so a pull request is recorded but never reviewed.
+const appId=process.env.GITHUB_APP_ID,privateKey=process.env.GITHUB_APP_PRIVATE_KEY;
+const broker=appId&&privateKey?new GitHubTokenBroker(appId,privateKey):undefined;
+const config=broker?new GitHubFileSource(broker):undefined;
+if(!config)console.log(JSON.stringify({event:'worker.no_github_app',message:'GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY are absent; events are recorded but no review run is created.'}));
 
 // Anything a previous process left behind is removed before new work is taken, so content
 // never outlives a crash by longer than one restart (ADR-038).
@@ -25,10 +35,11 @@ await queue.work('github.event',async payload=>{
   const metadata=delivery.rows[0]?.metadata;
   if(metadata===undefined||metadata===null)return;
   const outcome=await handleGitHubEvent(GitHubEventSchema.parse(metadata),{
-    db,runs,
+    db,runs,administration,
     scheduler:{enqueue:async next=>{await queue.send('pull_request.review',next);}},
-    // Bound once GitHub App credentials exist; without them no review run is created.
-    ...(process.env.GITHUB_APP_ID?{}:{}),
+    // Without App credentials the worker still records events; it simply cannot read the
+    // trusted configuration, so no review run is created and that is visible in the outcome.
+    ...(config?{config}:{}),
   });
   console.log(JSON.stringify({event:'github.event.handled',action:outcome.action,traceId:payload.traceId}));
 });
