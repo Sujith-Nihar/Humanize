@@ -1,0 +1,1712 @@
+{
+  "schemaVersion": 1,
+  "stages": [
+    {
+      "id": "P1-S00",
+      "title": "Documentation and architecture agreement",
+      "requirements": [
+        "All"
+      ],
+      "tasks": [
+        {
+          "id": "P1-S00-T01",
+          "title": "Preserve upstream specification",
+          "upstream": [],
+          "modules": [
+            "docs/spec"
+          ],
+          "acceptance": "Byte-identical checksum and provenance",
+          "status": "complete",
+          "evidence": "Preserved spec checksum and local links verified; 104 upstream tasks mapped to 99 task documents; accepted ADR-021 through ADR-035 and agent policy recorded. python3 scripts/check_docs.py passed.",
+          "nextAction": "No remaining S00 acceptance. Keep documentation synchronized with implementation.",
+          "updatedAt": "2026-09-17T19:39:37.200825+00:00"
+        },
+        {
+          "id": "P1-S00-T02",
+          "title": "Document architecture and concerns",
+          "upstream": [
+            "P1-S0-005"
+          ],
+          "modules": [
+            "docs/architecture",
+            "docs/adr"
+          ],
+          "acceptance": "All 15 concerns have explicit dispositions",
+          "status": "complete",
+          "evidence": "Preserved spec checksum and local links verified; 104 upstream tasks mapped to 99 task documents; accepted ADR-021 through ADR-035 and agent policy recorded. python3 scripts/check_docs.py passed.",
+          "nextAction": "No remaining S00 acceptance. Keep documentation synchronized with implementation.",
+          "updatedAt": "2026-09-17T19:39:37.233764+00:00"
+        },
+        {
+          "id": "P1-S00-T03",
+          "title": "Establish agent policy and navigation",
+          "upstream": [
+            "P1-S0-006"
+          ],
+          "modules": [
+            "AGENTS.md",
+            "CLAUDE.md",
+            "README.md"
+          ],
+          "acceptance": "Consistent instructions and valid links",
+          "status": "complete",
+          "evidence": "Preserved spec checksum and local links verified; 104 upstream tasks mapped to 99 task documents; accepted ADR-021 through ADR-035 and agent policy recorded. python3 scripts/check_docs.py passed.",
+          "nextAction": "No remaining S00 acceptance. Keep documentation synchronized with implementation.",
+          "updatedAt": "2026-09-17T19:39:37.268774+00:00"
+        },
+        {
+          "id": "P1-S00-T04",
+          "title": "Materialize requirement and task traceability",
+          "upstream": [],
+          "modules": [
+            "docs/product",
+            "docs/implementation"
+          ],
+          "acceptance": "Every upstream task and invariant has a mapping",
+          "status": "complete",
+          "evidence": "Preserved spec checksum and local links verified; 104 upstream tasks mapped to 99 task documents; accepted ADR-021 through ADR-035 and agent policy recorded. python3 scripts/check_docs.py passed.",
+          "nextAction": "No remaining S00 acceptance. Keep documentation synchronized with implementation.",
+          "updatedAt": "2026-09-17T19:39:37.299028+00:00"
+        }
+      ]
+    },
+    {
+      "id": "P1-S01",
+      "title": "Monorepo and executable contracts",
+      "requirements": [
+        "SEC-03",
+        "NFR-04",
+        "NFR-05",
+        "NFR-06"
+      ],
+      "tasks": [
+        {
+          "id": "P1-S01-T01",
+          "title": "Create strict pnpm workspace",
+          "upstream": [
+            "P1-S0-001"
+          ],
+          "modules": [
+            "workspace",
+            "scripts"
+          ],
+          "acceptance": "Clean install, build, typecheck and dependency-boundary checks",
+          "status": "in_progress",
+          "evidence": "Monorepo, domain contracts, test/CI scaffolding, local PostgreSQL setup and operational telemetry skeleton implemented. Latest pnpm check passed documentation, package boundaries, TypeScript, lint and 24 unit tests across 9 files (2026-09-17).",
+          "nextAction": "Verify each foundation acceptance criterion, clean-checkout/remote CI and current full build; broader telemetry/redaction coverage remains.",
+          "updatedAt": "2026-09-17T20:00:09.348447+00:00"
+        },
+        {
+          "id": "P1-S01-T02",
+          "title": "Define versioned domain contracts",
+          "upstream": [
+            "P1-S0-002"
+          ],
+          "modules": [
+            "domain"
+          ],
+          "acceptance": "Malformed inputs and invalid transitions rejected",
+          "status": "in_progress",
+          "evidence": "Monorepo, domain contracts, test/CI scaffolding, local PostgreSQL setup and operational telemetry skeleton implemented. Latest pnpm check passed documentation, package boundaries, TypeScript, lint and 24 unit tests across 9 files (2026-09-17).",
+          "nextAction": "Verify each foundation acceptance criterion, clean-checkout/remote CI and current full build; broader telemetry/redaction coverage remains.",
+          "updatedAt": "2026-09-17T20:00:09.375725+00:00"
+        },
+        {
+          "id": "P1-S01-T03",
+          "title": "Create CI and trusted test harness",
+          "upstream": [
+            "P1-S0-003"
+          ],
+          "modules": [
+            "testing",
+            ".github/workflows"
+          ],
+          "acceptance": "Clean checkout checks and deliberate failure detection",
+          "status": "in_progress",
+          "evidence": "Monorepo, domain contracts, test/CI scaffolding, local PostgreSQL setup and operational telemetry skeleton implemented. Latest pnpm check passed documentation, package boundaries, TypeScript, lint and 24 unit tests across 9 files (2026-09-17).",
+          "nextAction": "Verify each foundation acceptance criterion, clean-checkout/remote CI and current full build; broader telemetry/redaction coverage remains.",
+          "updatedAt": "2026-09-17T20:00:09.405924+00:00"
+        },
+        {
+          "id": "P1-S01-T04",
+          "title": "Bootstrap local PostgreSQL",
+          "upstream": [
+            "P1-S0-004"
+          ],
+          "modules": [
+            "compose.yaml",
+            "docs/testing"
+          ],
+          "acceptance": "Fresh database reaches healthy state",
+          "status": "in_progress",
+          "evidence": "Monorepo, domain contracts, test/CI scaffolding, local PostgreSQL setup and operational telemetry skeleton implemented. Latest pnpm check passed documentation, package boundaries, TypeScript, lint and 24 unit tests across 9 files (2026-09-17).",
+          "nextAction": "Verify each foundation acceptance criterion, clean-checkout/remote CI and current full build; broader telemetry/redaction coverage remains.",
+          "updatedAt": "2026-09-17T20:00:09.433179+00:00"
+        },
+        {
+          "id": "P1-S01-T05",
+          "title": "Create redacted telemetry foundation",
+          "upstream": [
+            "P1-S11-001"
+          ],
+          "modules": [
+            "telemetry"
+          ],
+          "acceptance": "Secret and source sentinels absent from logs",
+          "status": "in_progress",
+          "evidence": "Monorepo, domain contracts, test/CI scaffolding, local PostgreSQL setup and operational telemetry skeleton implemented. Latest pnpm check passed documentation, package boundaries, TypeScript, lint and 24 unit tests across 9 files (2026-09-17).",
+          "nextAction": "Verify each foundation acceptance criterion, clean-checkout/remote CI and current full build; broader telemetry/redaction coverage remains.",
+          "updatedAt": "2026-09-17T20:00:09.459808+00:00"
+        }
+      ]
+    },
+    {
+      "id": "P1-S02",
+      "title": "Restricted repository acquisition and diff geometry",
+      "requirements": [
+        "FR-03",
+        "FR-09",
+        "SEC-01",
+        "SEC-02",
+        "NFR-03"
+      ],
+      "tasks": [
+        {
+          "id": "P1-S02-T01",
+          "title": "Implement restricted Git acquisition",
+          "upstream": [
+            "P1-S3-001",
+            "P1-S3-003"
+          ],
+          "modules": [
+            "scanner"
+          ],
+          "acceptance": "Hooks, filters, protocols and argument injection cannot execute or leak secrets",
+          "status": "in_progress",
+          "evidence": "Restricted Git wrapper, ephemeral workspace lifecycle, inventory classification and merge-base diff geometry implemented with initial hostile-Git and geometry fixtures. Latest pnpm check passed documentation, package boundaries, TypeScript, lint and 24 unit tests across 9 files (2026-09-17).",
+          "nextAction": "Complete live GitHub acquisition, missing-history and exhaustive security/resource/cleanup cases; no full scanner acceptance claimed.",
+          "updatedAt": "2026-09-17T20:00:09.487337+00:00"
+        },
+        {
+          "id": "P1-S02-T02",
+          "title": "Implement ephemeral workspace lifecycle",
+          "upstream": [
+            "P1-S3-002"
+          ],
+          "modules": [
+            "scanner"
+          ],
+          "acceptance": "Cleanup on success, error, cancellation, timeout and orphan recovery",
+          "status": "in_progress",
+          "evidence": "Restricted Git wrapper, ephemeral workspace lifecycle, inventory classification and merge-base diff geometry implemented with initial hostile-Git and geometry fixtures. Latest pnpm check passed documentation, package boundaries, TypeScript, lint and 24 unit tests across 9 files (2026-09-17).",
+          "nextAction": "Complete live GitHub acquisition, missing-history and exhaustive security/resource/cleanup cases; no full scanner acceptance claimed.",
+          "updatedAt": "2026-09-17T20:00:09.513771+00:00"
+        },
+        {
+          "id": "P1-S02-T03",
+          "title": "Enumerate and classify all tracked files",
+          "upstream": [
+            "P1-S3-004",
+            "P1-S3-005",
+            "P1-S3-006"
+          ],
+          "modules": [
+            "scanner"
+          ],
+          "acceptance": "Inventory matches Git including binary, generated, ignored and special paths",
+          "status": "in_progress",
+          "evidence": "Restricted Git wrapper, ephemeral workspace lifecycle, inventory classification and merge-base diff geometry implemented with initial hostile-Git and geometry fixtures. Latest pnpm check passed documentation, package boundaries, TypeScript, lint and 24 unit tests across 9 files (2026-09-17).",
+          "nextAction": "Complete live GitHub acquisition, missing-history and exhaustive security/resource/cleanup cases; no full scanner acceptance claimed.",
+          "updatedAt": "2026-09-17T20:00:09.540365+00:00"
+        },
+        {
+          "id": "P1-S02-T04",
+          "title": "Compute merge-base PR diff geometry",
+          "upstream": [
+            "P1-S3-007"
+          ],
+          "modules": [
+            "github"
+          ],
+          "acceptance": "Golden tests cover renames, deletion, Unicode, CRLF and multiline hunks",
+          "status": "in_progress",
+          "evidence": "Restricted Git wrapper, ephemeral workspace lifecycle, inventory classification and merge-base diff geometry implemented with initial hostile-Git and geometry fixtures. Latest pnpm check passed documentation, package boundaries, TypeScript, lint and 24 unit tests across 9 files (2026-09-17).",
+          "nextAction": "Complete live GitHub acquisition, missing-history and exhaustive security/resource/cleanup cases; no full scanner acceptance claimed.",
+          "updatedAt": "2026-09-17T20:00:09.567093+00:00"
+        }
+      ]
+    },
+    {
+      "id": "P1-S03",
+      "title": "First extraction and source-range proof",
+      "requirements": [
+        "FR-04",
+        "FR-05",
+        "FR-09",
+        "SEC-03",
+        "NFR-04"
+      ],
+      "tasks": [
+        {
+          "id": "P1-S03-T01",
+          "title": "Define source mapping and identity",
+          "upstream": [
+            "P1-S4-001"
+          ],
+          "modules": [
+            "extractors",
+            "domain"
+          ],
+          "acceptance": "Deterministic IDs and exact UTF-16/entity/escape mapping",
+          "status": "in_progress",
+          "evidence": "Initial ContentNode source mapping, Babel JSX/static literal extraction, Markdown/MDX extraction and placeholder recognition implemented. Earlier extractor type errors are resolved. Latest pnpm check passed documentation, package boundaries, TypeScript, lint and 24 unit tests across 9 files (2026-09-17).",
+          "nextAction": "Complete per-task source geometry/placeholder coverage, isolated parser workers and extraction gold evaluation. S03-T05 remains planned.",
+          "updatedAt": "2026-09-17T20:00:09.593602+00:00"
+        },
+        {
+          "id": "P1-S03-T02",
+          "title": "Extract Babel visible content",
+          "upstream": [
+            "P1-S4-002",
+            "P1-S4-009"
+          ],
+          "modules": [
+            "extractors"
+          ],
+          "acceptance": "Visible JSX/props/calls extracted; internal literals excluded",
+          "status": "in_progress",
+          "evidence": "Initial ContentNode source mapping, Babel JSX/static literal extraction, Markdown/MDX extraction and placeholder recognition implemented. Earlier extractor type errors are resolved. Latest pnpm check passed documentation, package boundaries, TypeScript, lint and 24 unit tests across 9 files (2026-09-17).",
+          "nextAction": "Complete per-task source geometry/placeholder coverage, isolated parser workers and extraction gold evaluation. S03-T05 remains planned.",
+          "updatedAt": "2026-09-17T20:00:09.620270+00:00"
+        },
+        {
+          "id": "P1-S03-T03",
+          "title": "Extract Markdown and MDX",
+          "upstream": [
+            "P1-S4-004"
+          ],
+          "modules": [
+            "extractors"
+          ],
+          "acceptance": "Prose maps exactly; code and expressions excluded",
+          "status": "in_progress",
+          "evidence": "Initial ContentNode source mapping, Babel JSX/static literal extraction, Markdown/MDX extraction and placeholder recognition implemented. Earlier extractor type errors are resolved. Latest pnpm check passed documentation, package boundaries, TypeScript, lint and 24 unit tests across 9 files (2026-09-17).",
+          "nextAction": "Complete per-task source geometry/placeholder coverage, isolated parser workers and extraction gold evaluation. S03-T05 remains planned.",
+          "updatedAt": "2026-09-17T20:00:09.646959+00:00"
+        },
+        {
+          "id": "P1-S03-T04",
+          "title": "Extract placeholder metadata",
+          "upstream": [
+            "P1-S4-010"
+          ],
+          "modules": [
+            "extractors"
+          ],
+          "acceptance": "Handlebars, printf, interpolation and ICU multisets retained",
+          "status": "in_progress",
+          "evidence": "Initial ContentNode source mapping, Babel JSX/static literal extraction, Markdown/MDX extraction and placeholder recognition implemented. Earlier extractor type errors are resolved. Latest pnpm check passed documentation, package boundaries, TypeScript, lint and 24 unit tests across 9 files (2026-09-17).",
+          "nextAction": "Complete per-task source geometry/placeholder coverage, isolated parser workers and extraction gold evaluation. S03-T05 remains planned.",
+          "updatedAt": "2026-09-17T20:00:09.673693+00:00"
+        },
+        {
+          "id": "P1-S03-T05",
+          "title": "Create extraction evaluation harness",
+          "upstream": [
+            "P1-S4-011"
+          ],
+          "modules": [
+            "evals/extraction"
+          ],
+          "acceptance": "Precision, recall and range metrics are reproducible",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "P1-S04",
+      "title": "All four provider contracts",
+      "requirements": [
+        "FR-18",
+        "SEC-03",
+        "SEC-04"
+      ],
+      "tasks": [
+        {
+          "id": "P1-S04-T01",
+          "title": "Implement neutral schema projection",
+          "upstream": [
+            "P1-S6-001",
+            "P1-S6-002"
+          ],
+          "modules": [
+            "providers",
+            "domain"
+          ],
+          "acceptance": "Canonical application schema accepted by contract fixtures",
+          "status": "in_progress",
+          "evidence": "Four provider adapters and mocked normalization, retry, refusal, cancellation and Ollama filtering contracts implemented. Latest pnpm check passed documentation, package boundaries, TypeScript, lint and 24 unit tests across 9 files (2026-09-17).",
+          "nextAction": "Live provider credentials and Ollama absent. Validate actual application-shaped schemas, model capabilities and routing metadata; no live compatibility claimed.",
+          "updatedAt": "2026-09-17T20:00:09.700247+00:00"
+        },
+        {
+          "id": "P1-S04-T02",
+          "title": "Normalize retries and errors",
+          "upstream": [
+            "P1-S6-006"
+          ],
+          "modules": [
+            "providers"
+          ],
+          "acceptance": "Timeout, cancellation, repair and retry budgets bounded",
+          "status": "in_progress",
+          "evidence": "Four provider adapters and mocked normalization, retry, refusal, cancellation and Ollama filtering contracts implemented. Latest pnpm check passed documentation, package boundaries, TypeScript, lint and 24 unit tests across 9 files (2026-09-17).",
+          "nextAction": "Live provider credentials and Ollama absent. Validate actual application-shaped schemas, model capabilities and routing metadata; no live compatibility claimed.",
+          "updatedAt": "2026-09-17T20:00:09.726818+00:00"
+        },
+        {
+          "id": "P1-S04-T03",
+          "title": "Implement OpenAI Responses adapter",
+          "upstream": [
+            "P1-S6-003"
+          ],
+          "modules": [
+            "providers"
+          ],
+          "acceptance": "Live structured/refusal/truncation and usage evidence",
+          "status": "in_progress",
+          "evidence": "Four provider adapters and mocked normalization, retry, refusal, cancellation and Ollama filtering contracts implemented. Latest pnpm check passed documentation, package boundaries, TypeScript, lint and 24 unit tests across 9 files (2026-09-17).",
+          "nextAction": "Live provider credentials and Ollama absent. Validate actual application-shaped schemas, model capabilities and routing metadata; no live compatibility claimed.",
+          "updatedAt": "2026-09-17T20:00:09.754375+00:00"
+        },
+        {
+          "id": "P1-S04-T04",
+          "title": "Implement Gemini adapter",
+          "upstream": [
+            "P1-S6-004"
+          ],
+          "modules": [
+            "providers"
+          ],
+          "acceptance": "Authorization-key and schema probes; safety/quota normalization",
+          "status": "in_progress",
+          "evidence": "Four provider adapters and mocked normalization, retry, refusal, cancellation and Ollama filtering contracts implemented. Latest pnpm check passed documentation, package boundaries, TypeScript, lint and 24 unit tests across 9 files (2026-09-17).",
+          "nextAction": "Live provider credentials and Ollama absent. Validate actual application-shaped schemas, model capabilities and routing metadata; no live compatibility claimed.",
+          "updatedAt": "2026-09-17T20:00:09.784709+00:00"
+        },
+        {
+          "id": "P1-S04-T05",
+          "title": "Implement OpenRouter adapter",
+          "upstream": [
+            "P1-S6-005"
+          ],
+          "modules": [
+            "providers"
+          ],
+          "acceptance": "Incompatible routing rejected and actual routing metadata retained",
+          "status": "in_progress",
+          "evidence": "Four provider adapters and mocked normalization, retry, refusal, cancellation and Ollama filtering contracts implemented. Latest pnpm check passed documentation, package boundaries, TypeScript, lint and 24 unit tests across 9 files (2026-09-17).",
+          "nextAction": "Live provider credentials and Ollama absent. Validate actual application-shaped schemas, model capabilities and routing metadata; no live compatibility claimed.",
+          "updatedAt": "2026-09-17T20:00:09.811376+00:00"
+        },
+        {
+          "id": "P1-S04-T06",
+          "title": "Implement local Ollama adapter",
+          "upstream": [
+            "P1-S7-006",
+            "P1-S7-007"
+          ],
+          "modules": [
+            "providers"
+          ],
+          "acceptance": "Local schema probe; missing/incompatible/cloud models rejected",
+          "status": "in_progress",
+          "evidence": "Ollama adapter implemented against the native /api/chat endpoint with the JSON schema in the format field, temperature 0, local-only enforcement, model availability checked before each request, cloud and remote-host models filtered out of listModels, and an optional /api/embed path. FINDING AND FIX (2026-09-18): the adapter set num_predict but never num_ctx. Ollama defaults to a small context window (commonly 4096) and silently discards the overflow, and chat truncation drops the oldest messages first, which is the system prompt. The untrusted-content boundary declaration could therefore be evicted while the repository text it governs survived, degrading output quality and weakening the prompt-injection boundary at the same time. The adapter now requests num_ctx covering the whole budgeted request (LIMITS.contextTokens + LIMITS.outputTokens = 16000, raisable through AdapterOptions.contextTokens), with a test asserting num_ctx is at least the full budget, num_predict never exceeds it, and temperature stays 0. Results: pnpm check passed with 111 unit tests across 20 files; pnpm build passed.",
+          "nextAction": "Still unverified against a live service: no Ollama server has been contacted, so no model has been shown to satisfy the reviewer and verifier schemas in practice. A gated live contract test and the capability probe (P1-S04-T07) are the next step. A selected model must support a context window of at least 16000 tokens, otherwise the model clamps num_ctx and the silent truncation returns.",
+          "updatedAt": "2026-09-18T15:13:47.798221+00:00"
+        },
+        {
+          "id": "P1-S04-T07",
+          "title": "Implement connection probes and contract suite",
+          "upstream": [
+            "P1-S6-007",
+            "P1-S11-005"
+          ],
+          "modules": [
+            "providers",
+            "evals/provider-contracts"
+          ],
+          "acceptance": "All four providers pass application-shaped probes",
+          "status": "in_progress",
+          "evidence": "FIRST LIVE PROVIDER VERIFICATION IN THIS PROJECT. A deliberate live lane was added (vitest.live.config.ts, pnpm test:live, matching *.live.test.ts, excluded from the default and integration lanes so pnpm check never requires a running service). Against a real local Ollama (qwen3.5:4b, 4.7B Q4_K_M, declared context 262144) all 5 contract tests in packages/providers/ollama.live.test.ts passed: the application-shaped capability probe, the real ReviewerResponseSchema returning a schema-valid response for content deserving a finding, the same schema returning an empty candidate list for acceptable content, VerificationSchema returning a verdict bound to the exact ADR-036 candidate identity supplied, and rejection of a model that is not installed. TWO LIVE-ONLY DEFECTS FOUND, both invisible to mocked tests. First, the adapter never set num_ctx; Ollama defaults to a small window and silently discards the overflow, and chat truncation drops the oldest message first, which is the system prompt carrying the untrusted-content boundary, so quality and the prompt-injection defence would degrade together. Second, a model advertising the thinking capability spends the bounded output budget on reasoning and never emits JSON: every pipeline call failed with CONTEXT_LIMIT after about 55 seconds. The adapter now requests num_ctx covering the full budget and sends think:false, but only to a model whose /api/show capabilities declare thinking, since the field is invalid otherwise; the capability is resolved once per model and cached. Measured effect: an identical structured request went from exhausting 4000 output tokens and failing to completing in 57 tokens and 1.1 seconds. Results: pnpm check 114 unit tests across 20 files; pnpm build passed; 40 integration tests passed; 8 live tests passed in 25.8 seconds.",
+          "nextAction": "Live evidence covers Ollama only. OpenAI, Gemini and OpenRouter remain entirely unverified against live services and no credentials are present, so the acceptance that all four providers pass application-shaped probes is NOT met. Live coverage is also single-model: qwen3.5:4b passing establishes nothing about other local models, and a model must be confirmed to support at least a 16000-token window.",
+          "updatedAt": "2026-09-18T16:12:54.719241+00:00"
+        }
+      ]
+    },
+    {
+      "id": "P1-S05",
+      "title": "Durable state secrets and scheduling",
+      "requirements": [
+        "FR-24",
+        "SEC-04",
+        "SEC-05",
+        "NFR-01",
+        "NFR-02"
+      ],
+      "tasks": [
+        {
+          "id": "P1-S05-T01",
+          "title": "Create tenant and configuration schemas",
+          "upstream": [
+            "P1-S1-001"
+          ],
+          "modules": [
+            "db"
+          ],
+          "acceptance": "Migrations and cross-tenant foreign key tests pass",
+          "status": "in_progress",
+          "evidence": "Initial schema, encrypted secrets, run-state CAS and transactional pg-boss integration implemented. Five real PostgreSQL integration tests passed before migrations 0002/0003 and runner-store additions. Latest pnpm check passed documentation, package boundaries, TypeScript, lint and 24 unit tests across 9 files (2026-09-17).",
+          "nextAction": "Run new migration/integration coverage, then complete lifecycle, key rotation, worker restart, dead-letter and recovery acceptance. New runner integration tests are not yet executed.",
+          "updatedAt": "2026-09-17T20:00:09.891873+00:00"
+        },
+        {
+          "id": "P1-S05-T02",
+          "title": "Create review and publication metadata",
+          "upstream": [
+            "P1-S1-002"
+          ],
+          "modules": [
+            "db"
+          ],
+          "acceptance": "Uniqueness and metadata-only ephemeral persistence verified",
+          "status": "in_progress",
+          "evidence": "Initial schema, encrypted secrets, run-state CAS and transactional pg-boss integration implemented. Five real PostgreSQL integration tests passed before migrations 0002/0003 and runner-store additions. Latest pnpm check passed documentation, package boundaries, TypeScript, lint and 24 unit tests across 9 files (2026-09-17).",
+          "nextAction": "Run new migration/integration coverage, then complete lifecycle, key rotation, worker restart, dead-letter and recovery acceptance. New runner integration tests are not yet executed.",
+          "updatedAt": "2026-09-17T20:00:09.918242+00:00"
+        },
+        {
+          "id": "P1-S05-T03",
+          "title": "Implement encrypted SecretStore",
+          "upstream": [
+            "P1-S1-004"
+          ],
+          "modules": [
+            "security",
+            "db"
+          ],
+          "acceptance": "Tenant-bound encryption, rotation and revocation pass",
+          "status": "in_progress",
+          "evidence": "Initial schema, encrypted secrets, run-state CAS and transactional pg-boss integration implemented. Five real PostgreSQL integration tests passed before migrations 0002/0003 and runner-store additions. Latest pnpm check passed documentation, package boundaries, TypeScript, lint and 24 unit tests across 9 files (2026-09-17).",
+          "nextAction": "Run new migration/integration coverage, then complete lifecycle, key rotation, worker restart, dead-letter and recovery acceptance. New runner integration tests are not yet executed.",
+          "updatedAt": "2026-09-17T20:00:09.944879+00:00"
+        },
+        {
+          "id": "P1-S05-T04",
+          "title": "Implement transactional durable queue",
+          "upstream": [
+            "P1-S1-005"
+          ],
+          "modules": [
+            "queue",
+            "db"
+          ],
+          "acceptance": "Rollback leaves neither state nor job; restart preserves work",
+          "status": "in_progress",
+          "evidence": "Initial schema, encrypted secrets, run-state CAS and transactional pg-boss integration implemented. Five real PostgreSQL integration tests passed before migrations 0002/0003 and runner-store additions. Latest pnpm check passed documentation, package boundaries, TypeScript, lint and 24 unit tests across 9 files (2026-09-17).",
+          "nextAction": "Run new migration/integration coverage, then complete lifecycle, key rotation, worker restart, dead-letter and recovery acceptance. New runner integration tests are not yet executed.",
+          "updatedAt": "2026-09-17T20:00:09.971918+00:00"
+        },
+        {
+          "id": "P1-S05-T05",
+          "title": "Implement persisted review transitions",
+          "upstream": [
+            "P1-S1-006"
+          ],
+          "modules": [
+            "db",
+            "domain"
+          ],
+          "acceptance": "Invalid and stale-attempt transitions fail",
+          "status": "in_progress",
+          "evidence": "Initial schema, encrypted secrets, run-state CAS and transactional pg-boss integration implemented. Five real PostgreSQL integration tests passed before migrations 0002/0003 and runner-store additions. Latest pnpm check passed documentation, package boundaries, TypeScript, lint and 24 unit tests across 9 files (2026-09-17).",
+          "nextAction": "Run new migration/integration coverage, then complete lifecycle, key rotation, worker restart, dead-letter and recovery acceptance. New runner integration tests are not yet executed.",
+          "updatedAt": "2026-09-17T20:00:10.003444+00:00"
+        },
+        {
+          "id": "P1-S05-T06",
+          "title": "Exercise durable concurrency failures",
+          "upstream": [
+            "P1-S11-007"
+          ],
+          "modules": [
+            "testing"
+          ],
+          "acceptance": "Crash, duplicate, expiration and dead-letter scenarios recover",
+          "status": "in_progress",
+          "evidence": "Initial schema, encrypted secrets, run-state CAS and transactional pg-boss integration implemented. Five real PostgreSQL integration tests passed before migrations 0002/0003 and runner-store additions. Latest pnpm check passed documentation, package boundaries, TypeScript, lint and 24 unit tests across 9 files (2026-09-17).",
+          "nextAction": "Run new migration/integration coverage, then complete lifecycle, key rotation, worker restart, dead-letter and recovery acceptance. New runner integration tests are not yet executed.",
+          "updatedAt": "2026-09-17T20:00:10.031621+00:00"
+        }
+      ]
+    },
+    {
+      "id": "P1-S06",
+      "title": "GitHub ingestion and early race proof",
+      "requirements": [
+        "FR-01",
+        "FR-02",
+        "FR-17",
+        "SEC-04",
+        "SEC-06",
+        "NFR-02"
+      ],
+      "tasks": [
+        {
+          "id": "P1-S06-T01",
+          "title": "Implement App token broker",
+          "upstream": [
+            "P1-S2-001"
+          ],
+          "modules": [
+            "github"
+          ],
+          "acceptance": "Live test App proves repository and permission scope",
+          "status": "in_progress",
+          "evidence": "HMAC verification, minimized webhook metadata, event-intent classifier, scoped token broker and Fastify durable ingestion implemented. API/signature tests included in 24 passing unit tests. Latest pnpm check passed documentation, package boundaries, TypeScript, lint and 24 unit tests across 9 files (2026-09-17).",
+          "nextAction": "Implement asynchronous GitHub reconciliation, debounce and failed-delivery recovery scheduling; verify live App permissions and complete event lifecycle. Publishing transport task T06 remains planned.",
+          "updatedAt": "2026-09-17T20:00:10.058162+00:00"
+        },
+        {
+          "id": "P1-S06-T02",
+          "title": "Verify raw webhook signatures",
+          "upstream": [
+            "P1-S2-002"
+          ],
+          "modules": [
+            "github",
+            "apps/api"
+          ],
+          "acceptance": "Signature vectors and tamper tests pass before effects",
+          "status": "in_progress",
+          "evidence": "HMAC verification, minimized webhook metadata, event-intent classifier, scoped token broker and Fastify durable ingestion implemented. API/signature tests included in 24 passing unit tests. Latest pnpm check passed documentation, package boundaries, TypeScript, lint and 24 unit tests across 9 files (2026-09-17).",
+          "nextAction": "Implement asynchronous GitHub reconciliation, debounce and failed-delivery recovery scheduling; verify live App permissions and complete event lifecycle. Publishing transport task T06 remains planned.",
+          "updatedAt": "2026-09-17T20:00:10.084778+00:00"
+        },
+        {
+          "id": "P1-S06-T03",
+          "title": "Deduplicate and recover deliveries",
+          "upstream": [
+            "P1-S2-003"
+          ],
+          "modules": [
+            "apps/api",
+            "queue"
+          ],
+          "acceptance": "Atomic enqueue and replay/recovery produce one intended run",
+          "status": "in_progress",
+          "evidence": "HMAC verification, minimized webhook metadata, event-intent classifier, scoped token broker and Fastify durable ingestion implemented. API/signature tests included in 24 passing unit tests. Latest pnpm check passed documentation, package boundaries, TypeScript, lint and 24 unit tests across 9 files (2026-09-17).",
+          "nextAction": "Implement asynchronous GitHub reconciliation, debounce and failed-delivery recovery scheduling; verify live App permissions and complete event lifecycle. Publishing transport task T06 remains planned.",
+          "updatedAt": "2026-09-17T20:00:10.110772+00:00"
+        },
+        {
+          "id": "P1-S06-T04",
+          "title": "Route installation and PR lifecycle",
+          "upstream": [
+            "P1-S2-004",
+            "P1-S2-005"
+          ],
+          "modules": [
+            "apps/api"
+          ],
+          "acceptance": "Reordered events cannot revive removed access or obsolete work",
+          "status": "in_progress",
+          "evidence": "Installation, repository and pull-request event handling implemented in apps/worker/src/handlers.ts, with the acceptance property proven: reordered events cannot revive removed access or obsolete work. An installation event records suspension and deletion, and DELETION IS TERMINAL: the update only ever moves deleted from false to true, so a redelivered creation cannot restore access a user removed, and suspension is not touched once an installation is deleted. A repository is recorded on any event that carries one, but a repository nobody enabled is never reviewed. A pull request is only scheduled for review on opened, synchronize, reopened or ready_for_review, drafts are skipped unless marked ready, and the generation advances only when the head actually moves so a redelivery is inert. ORDERING DEFECT FOUND AND CLOSED: the event contract carried no timestamp, so a redelivered older event would have overwritten a newer head. GitHubEventSchema now carries occurredAt, normalizeWebhook takes it from the pull request or repository updated_at and falls back to receipt time, and the pull-request upsert refuses to apply an event older than the row it would overwrite, returning superseded_by_newer_event. 5 PostgreSQL integration tests prove each property, including that a stale synchronize cannot drag a pull request back to a head it has moved past, and that a redelivered creation cannot undelete an installation. Results: pnpm check 191 unit tests across 31 files; pnpm build passed; 45 integration tests passed from a freshly created disposable database.",
+          "nextAction": "The handler decides what should happen but does not yet enqueue: a scheduled review returns its intent rather than creating a review run and sending pull_request.review, because run creation needs the resolved configuration snapshot that P1-S08-T01 produces and nothing yet reads .humanize.yml from the base commit. Debounce across rapid pushes is represented by the generation counter but no coalescing window exists. The worker process itself is still a library rather than a running service with queue subscriptions.",
+          "updatedAt": "2026-09-18T18:41:41.340233+00:00"
+        },
+        {
+          "id": "P1-S06-T05",
+          "title": "Route default-branch pushes",
+          "upstream": [
+            "P1-S2-006"
+          ],
+          "modules": [
+            "apps/api"
+          ],
+          "acceptance": "Correct scans and force-push/deleted-ref handling",
+          "status": "in_progress",
+          "evidence": "HMAC verification, minimized webhook metadata, event-intent classifier, scoped token broker and Fastify durable ingestion implemented. API/signature tests included in 24 passing unit tests. Latest pnpm check passed documentation, package boundaries, TypeScript, lint and 24 unit tests across 9 files (2026-09-17).",
+          "nextAction": "Implement asynchronous GitHub reconciliation, debounce and failed-delivery recovery scheduling; verify live App permissions and complete event lifecycle. Publishing transport task T06 remains planned.",
+          "updatedAt": "2026-09-17T20:00:10.163966+00:00"
+        },
+        {
+          "id": "P1-S06-T06",
+          "title": "Prove GitHub check and review transport",
+          "upstream": [
+            "P1-S2-007",
+            "P1-S2-008"
+          ],
+          "modules": [
+            "github"
+          ],
+          "acceptance": "Live exact-line comment and simulated uncertain-write reconciliation",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "P1-S07",
+      "title": "Runner identity and lease protocol",
+      "requirements": [
+        "FR-20",
+        "SEC-04",
+        "SEC-05",
+        "NFR-01"
+      ],
+      "tasks": [
+        {
+          "id": "P1-S07-T01",
+          "title": "Create runner lease persistence",
+          "upstream": [
+            "P1-S1-003"
+          ],
+          "modules": [
+            "db"
+          ],
+          "acceptance": "Concurrent claims produce one fenced lease",
+          "status": "complete",
+          "evidence": "Acceptance criterion proven against PostgreSQL 18.6: concurrent claims produce one fenced lease. Migrations 0000-0003 apply from a freshly created disposable database and re-apply idempotently. runner_leases carries fence, attempts, expiry and result_hash with composite tenant foreign keys and UNIQUE(run_id); two simultaneous claims grant exactly one lease under FOR UPDATE SKIP LOCKED, with the persisted row showing LEASED, attempts=1 and the fence returned to the winner. Expiry reclamation increments the fence and invalidates the previous one on renewal; revocation cancels live leases. SUBSEQUENT FIX (2026-09-18): lease liveness is now decided by the database clock. RunnerStore.accept previously compared a PostgreSQL timestamp against the API process clock, so any skew between the two machines could accept a lease the database had already expired and possibly reassigned, which risks two runners submitting results for one review; the comparison moved into SQL and claim/renew now also return expiresInMs so a remote runner never depends on clock agreement either. Covered by a regression test that forces the process clock an hour behind and an hour ahead and asserts the database decision holds both ways. 40 integration tests and 99 unit tests pass; pnpm check and pnpm build pass.",
+          "nextAction": "No remaining acceptance for lease persistence. Revisit only if the lease protocol changes; note that expiresInMs is now part of the claim and renewal contract.",
+          "updatedAt": "2026-09-18T12:59:16.900865+00:00"
+        },
+        {
+          "id": "P1-S07-T02",
+          "title": "Implement enrollment and heartbeat",
+          "upstream": [
+            "P1-S7-001",
+            "P1-S7-002"
+          ],
+          "modules": [
+            "apps/api",
+            "security"
+          ],
+          "acceptance": "Single-use expiry, revocation, impersonation tests pass",
+          "status": "in_progress",
+          "evidence": "Runner identity now has an authenticated HTTP surface and its acceptance criteria (single-use, expiry, revocation, impersonation) pass through the transport, not only the store. Added apps/api/src/runner.ts with POST /runner/registrations and POST /runner/heartbeats behind a RunnerService port; RunnerStore satisfies it structurally, so apps/api holds no persistence logic. Protocol and schema versions are checked before any state change (409 INCOMPATIBLE_PROTOCOL, service never invoked); bodies are schema validated and capped at 8 KiB; heartbeat requires a well-formed bearer credential; only INVALID_ENROLLMENT, RUNNER_UNAUTHORIZED and INVALID_SCOPE are reportable and every other failure returns a generic 503 with no diagnostics. Also corrected the shared Fastify error handler, which previously flattened client errors into 500 and would have made a caller retry a permanently invalid or oversized request; it now preserves 4xx status while still echoing no error text. Tests: 7 unit cases in apps/api/runner.test.ts (registration and heartbeat success, incompatible protocol and schema, five malformed bodies, five bad Authorization forms, mapped 401s, generic 503 that does not leak a connection string, 413 on oversize) and 5 PostgreSQL 18.6 tests in apps/api/runner.integration.test.ts driving the real RunnerStore over HTTP (credential stored only as a hash and heartbeat timestamp advanced, concurrent registrations on one token yield exactly one 201 and one 401 with later reuse refused, expired and unknown tokens refused, revoked and forged credentials refused, cross-tenant enrollment scope refused and a foreign runner scoped to its own organization). Results: pnpm check passed with 42 unit tests across 12 files; pnpm build passed; 21 integration tests passed twice from a freshly created disposable humanize_test database.",
+          "nextAction": "Remaining before complete: the enrollment-token creation endpoint is still absent because it needs dashboard administrator authentication, which P1-S16-T01 owns; enrollment is currently reachable only through RunnerStore.enrollment. Also add 90-second offline detection and its dashboard/scheduler consumer, and rate limiting for unauthenticated registration attempts. No live deployment of these endpoints has been exercised.",
+          "updatedAt": "2026-09-17T20:17:47.504590+00:00"
+        },
+        {
+          "id": "P1-S07-T03",
+          "title": "Implement outbound lease protocol",
+          "upstream": [
+            "P1-S7-003"
+          ],
+          "modules": [
+            "apps/api",
+            "apps/runner"
+          ],
+          "acceptance": "Renewal, partition, expiry, cancellation and retry tests pass",
+          "status": "in_progress",
+          "evidence": "Outbound lease protocol implemented and its acceptance cases pass. apps/api adds POST /runner/leases (200 lease, 204 when idle), POST /runner/leases/:leaseId/renewal and POST /runner/leases/:leaseId/failure through the existing RunnerService port. apps/runner adds: src/client.ts, an outbound-only client that schema validates every control-plane response before use, rejects a non-HTTP control-plane address, refuses authenticated calls before registration, and maps 409 to LeaseLostError, 401/403 to RunnerUnauthorizedError and timeouts/5xx to TransportError; src/lease.ts, a session owning the renewal timer and the executor AbortSignal; src/loop.ts, a claim-one-job-at-a-time poll loop that backs off on transport failure and stops on revocation instead of re-registering. Safety contract proven: a lost lease aborts the executor, reports neither a result nor a failure because the fence is stale, and the job-scoped GitHub credential never outlives the session call frame, which closes the residual risk recorded against T04. Tests: 8 fake-timer unit cases in apps/runner/lease.test.ts (renewal on schedule, cancellation abort with nothing reported, partition shorter than the held lease survived, partition outlasting the lease gives up, retryable versus permanent versus unauthorized failure classification, lease lost while reporting a failure, renewal timer stopped on every exit path, no work started when the credential cannot be issued); 6 unit cases in apps/runner/client.test.ts (outbound URL and bearer header, 204 idle, failure mapping, three malformed payloads and non-JSON refused, no authenticated call before registration, non-HTTP address refused); and 5 PostgreSQL 18.6 cases in apps/api/lease-protocol.integration.test.ts driving the real client against the real routes and store: claim/renew/complete with the snapshot and repository identity matching, idle 204, three retryable attempts followed by FAILED_FINAL with attempts=3 and no fourth claim, mid-job revocation aborting the executor and leaving the lease CANCELLED, and every authenticated call refused after revocation. Results: pnpm check passed with 60 unit tests across 14 files; pnpm build passed; 32 integration tests passed twice from a freshly created disposable humanize_test database.",
+          "nextAction": "Not complete. apps/runner/src/main.ts deliberately refuses to start with RUNNER_EXECUTOR_NOT_IMPLEMENTED: the lease protocol drives an executor that does not exist yet, since extraction, retrieval, review and suggestion execution arrive in P1-S08 and packaging in P1-S15. A runner that claimed leases it cannot execute would consume attempts and fail real reviews. Remaining acceptance: process-restart recovery across a real runner process, and the result upload path (P1-S07-T05). No runner has been run as a real process against a live control plane; the integration test drives the routes through the Fastify injector.",
+          "updatedAt": "2026-09-17T20:29:41.764389+00:00"
+        },
+        {
+          "id": "P1-S07-T04",
+          "title": "Issue job-scoped GitHub credentials",
+          "upstream": [
+            "P1-S7-004"
+          ],
+          "modules": [
+            "apps/api",
+            "github"
+          ],
+          "acceptance": "Wrong scope or revoked lease cannot receive tokens",
+          "status": "in_progress",
+          "evidence": "Job-scoped GitHub credential issuance implemented and its acceptance criterion proven: wrong scope or a revoked lease cannot receive a token. RunnerStore.leaseScope(credential,leaseId,fence) resolves only a live lease, applying the same liveness conditions as renewal (authenticated unrevoked runner, owning runner, exact fence, state LEASED, unexpired, repository enabled, installation neither suspended nor deleted, run not STALE/CANCELLED/COMPLETE/FAILED_FINAL) and returns only installation and repository identity plus head SHA. GitHubTokenBroker.scopedToken returns token and expiry for a single repository_ids entry with contents:read for the read role; publish permissions are unchanged and unavailable to runners. apps/api exposes POST /runner/leases/:leaseId/token behind a TokenIssuer port, so the issuer is structurally unreachable until the lease resolves. Tests: 4 unit cases in apps/api/runner.test.ts (issuer called exactly with the lease installation and repository and role read; LEASE_LOST returns 409 with the issuer never called; unauthenticated, malformed lease id and malformed fence never reach the service, and a path traversal does not resolve to the route; issuer failure returns a generic 503 that does not contain the token or key text) and 6 PostgreSQL 18.6 cases in apps/api/lease-token.integration.test.ts driving the real store over HTTP: a live lease yields a token scoped to exactly that installation and repository id, while a superseded fence, an unknown lease id, another tenant runner, an expired lease, a lease released back to the queue, a cancelled run, a disabled repository, a suspended installation and a revoked runner credential are all refused with the issuer never invoked. The T02 integration test now asserts that identity endpoints never invoke the issuer at all. Results: pnpm check passed with 46 unit tests across 12 files; pnpm build passed; 27 integration tests passed from a freshly created disposable humanize_test database.",
+          "nextAction": "Residual risk to close before completion: GitHub installation tokens live up to one hour and cannot be revoked individually, so a credential already issued outlives a lease that is lost immediately afterwards; the runner must therefore discard its token on lease loss, which belongs to P1-S07-T03. Also pending: live verification against a real GitHub App, which no credentials currently allow, and confirmation that the App grants only Contents read to these tokens. No live GitHub call has been made; the broker is exercised only through a port double.",
+          "updatedAt": "2026-09-17T20:22:30.156586+00:00"
+        },
+        {
+          "id": "P1-S07-T05",
+          "title": "Validate runner result envelopes",
+          "upstream": [
+            "P1-S7-009"
+          ],
+          "modules": [
+            "apps/api",
+            "domain"
+          ],
+          "acceptance": "Reject stale, conflicting, oversized or mismatched results",
+          "status": "in_progress",
+          "evidence": "Result upload, independent validation and the runner seam are implemented, and asynchronous publication is now possible. validateRunnerResult treats the runner as untrusted and checks nodes pinned to the reviewed head and repository, duplicate identities, candidates referencing only submitted nodes, quoted text genuinely present in its node so a fabricated quote cannot reach a pull request, resolving evidence references, and verification verdicts bound to a recomputed candidate identity. The upload route refuses oversized bodies before parsing, malformed or misaddressed envelopes, invalid content with codes only, and stale, superseded, expired, foreign or conflicting submissions, with identical duplicates idempotent and validation running before anything is persisted. Acceptance schedules publication through a port rather than publishing inline, and a duplicate never schedules twice. ARCHITECTURE CONFLICT SURFACED AND RESOLVED AS ADR-038: a scheduled publication was impossible to act on, because findings cannot be persisted with their text in ephemeral retention mode and the accepted result existed only in the answered HTTP request. Inline publication would make a runner wait on GitHub and lose the review on failure; an in-memory handoff would not survive a restart or a second instance. The accepted resolution introduces publication_payloads, holding the validated payload only until publication completes or is abandoned, which matches the specification wording that ephemeral context is rebuilt per review and DELETED AFTER THE JOB rather than never written. Migration 0004_famous_fixer.sql applies from a clean disposable database, and five PostgreSQL tests prove the lifetime guarantee: discarded after success, discarded after abandonment, swept when a crash leaves one behind while a live payload is untouched, refused for a non-existent run, and isolated by tenant. Results: pnpm check 191 unit tests across 31 files; pnpm build passed; 51 integration tests passed from a freshly created disposable database.",
+          "nextAction": "No publish worker process exists yet, so the payload lifetime is enforced by the store and proven at that level but not yet by a worker that calls discard on every path, including after an abandoned publish. That worker, its queue subscriptions and the retention sweep schedule are the next step, and the GitHub transport it drives still needs App credentials.",
+          "updatedAt": "2026-09-18T19:26:13.348001+00:00"
+        }
+      ]
+    },
+    {
+      "id": "P1-S08",
+      "title": "First useful-review and runner vertical slice",
+      "requirements": [
+        "FR-11",
+        "FR-12",
+        "FR-13",
+        "FR-14",
+        "FR-20",
+        "FR-21",
+        "NFR-05"
+      ],
+      "tasks": [
+        {
+          "id": "P1-S08-T01",
+          "title": "Resolve trusted configuration",
+          "upstream": [
+            "P1-S10-005",
+            "P1-S10-006"
+          ],
+          "modules": [
+            "config"
+          ],
+          "acceptance": "Trusted-base precedence and administrator-only fields enforced",
+          "status": "in_progress",
+          "evidence": "Trusted configuration resolution implemented and now WIRED TO A CALLER, which was the gap this task carried. packages/config parses .humanize.yml as hostile input (64 KiB cap, alias expansion capped, custom tags refused, mapping required), rejects any administrator-only key outright rather than ignoring it, lets a repository narrow review but never widen it, clamps the inline budget to the administrator cap, and fails closed to policy defaults so a malformed file cannot switch reviewing off. The event handler in apps/worker now reads that file through a TrustedFileSource port AT THE BASE REF, never the head, so a pull request cannot change the rules it will be judged by (ADR-027); it resolves the effective configuration against administrator policy, builds the ReviewSnapshot pinning configSha and the configuration digest, creates the review run and enqueues it. An integration test proves the read targets the base ref and the configuration path, that execution and retention in the stored snapshot come from policy rather than the repository file, that the run is persisted in state RECEIVED, and that a redelivery reuses the same run and produces the same idempotency key rather than a second review. Earlier finding retained: Zod 4 z.record() with an enum key is exhaustive, which silently invalidated any partial category map until it was changed to z.partialRecord. Results: pnpm check 191 unit tests across 31 files; pnpm build passed; 46 integration tests passed.",
+          "nextAction": "Remaining: no production TrustedFileSource exists, so nothing yet fetches the configuration file from GitHub; that binding needs App credentials. Organization policy is supplied through an injected function and has no persistence or administration surface, which is P1-S16-T02. Explicit learnings remain part of the documented precedence chain with no store behind them (P1-S17-T01). Path-specific configuration is resolved by the package but the caller passes no path, so per-path overrides are not yet applied per node.",
+          "updatedAt": "2026-09-18T19:18:57.791108+00:00"
+        },
+        {
+          "id": "P1-S08-T02",
+          "title": "Build ephemeral lexical context",
+          "upstream": [
+            "P1-S5-009"
+          ],
+          "modules": [
+            "retrieval"
+          ],
+          "acceptance": "Context works without content tables or embeddings",
+          "status": "in_progress",
+          "evidence": "Ephemeral lexical context implemented; acceptance that context works without content tables or embeddings is proven. packages/retrieval adds EphemeralContextIndex, an in-memory index over the ContentNodes of one review with BM25 ranking, character-trigram near-duplicate detection standing in for pg_trgm, and same-file neighbour lookup; it satisfies the existing RetrievalPort contract and depends only on @humanize/domain and @humanize/shared, so no database, no pgvector and no embedding provider is involved (INV-015). buildContext assembles the specified priority order (same-file neighbours, configured rules and approved voice, near duplicates, strongest related content) under a hard token budget that drops lower-priority evidence rather than stretching. Evidence records carry the commit revision and a content hash over blob, offsets and text so the control plane can revalidate them at publication. Tests (9, all passing): related content retrieved with no infrastructure; nodes from another repository or another commit rejected with NODE_OUT_OF_SNAPSHOT because scoping is a tenant boundary, not an optimization; deterministic results across repeated queries and reversed insertion order via stable-key tie-breaking; empty and stopword-only queries return nothing rather than noise; near duplicates detected while merely similar topics are not; neighbours ordered nearest-first within the same file only; content hash changes when the referenced text changes; context built in priority order with de-duplicated records, budget respected and truncation reported; and a repository with no related content yields empty context rather than failing. FINDING: swept the codebase for the Zod 4 exhaustive-record trap recorded against S08-T01 and found no other occurrence; the only remaining z.record uses a string key schema and is genuinely partial. Results: pnpm check passed with 84 unit tests across 17 files; pnpm build passed; 39 integration tests still pass from a freshly created disposable humanize_test database.",
+          "nextAction": "Remaining before complete: no caller yet builds an index or context, so this is proven in isolation rather than in a review; wiring arrives with P1-S08-T04. PR title and body and explicit learnings are named in the specification context set but are not yet available as evidence sources (learnings are P1-S17-T01). Ranking coefficients are a documented BM25 default and have not been tuned against the review corpus, which is P1-S08-T05. Indexed-mode PostgreSQL retrieval and optional pgvector fusion remain with P1-S12 and P1-S18; this task deliberately covers only the ephemeral path.",
+          "updatedAt": "2026-09-17T20:53:36.164369+00:00"
+        },
+        {
+          "id": "P1-S08-T03",
+          "title": "Implement deterministic rules and routing",
+          "upstream": [
+            "P1-S8-001",
+            "P1-S8-002"
+          ],
+          "modules": [
+            "rules",
+            "review"
+          ],
+          "acceptance": "Content kinds route to appropriate categories",
+          "status": "in_progress",
+          "evidence": "Deterministic rules and routing implemented and since improved by measurement. Rules emit the documented AI-style signals without any model, every span comes from the node text, and output is sorted for reproducibility; a test asserts no description ever claims machine authorship (INV-006). The router maps content kind and length to categories: a marketing paragraph receives the full set, a button label never receives long-form prose review, accessibility text receives clarity and terminology only, and disabled categories never route. TWO IMPROVEMENTS DRIVEN BY THE REVIEW GOLD SET. First, phrase matching was literal, so \"leveraging the power of\" did not match the listed \"leverage the power of\" and a passage fell below the cluster threshold, producing no finding; matching is now inflection-aware across ordinary English endings, verified by a test over leverage, leverages and leveraging. Second, the corpus showed the missed cases shared a shape the product had no rule for at all, namely wordiness and padding as distinct from promotional vocabulary; a padding rule family now covers constructions such as provides users with the ability to, it is important to note that and in order to get started, marked standalone under ADR-037 because they are countable, with a test asserting direct writing carries none. MEASURED EFFECT on the 26-case gold set: overall recall rose from 50% to 80%, clear-cut recall from 80% to 100%, ambiguous recall from 20% to 60%, and PRECISION REMAINED 100% throughout, so nothing was gained by becoming noisier. Results: pnpm check 189 unit tests across 31 files.",
+          "nextAction": "Two ambiguous cases remain missed and are being left alone deliberately: ai-assisted-residual would require adding empowers, seamlessly and streamline to the phrase list, and vague-tagline is a five-word heading the router intentionally does not send for long-form review. Both fixes would fit the corpus rather than generalise, which is the definition of overfitting a ten-case set. Phrase lists remain hand-written and unmeasured against real repositories.",
+          "updatedAt": "2026-09-18T18:16:33.527299+00:00"
+        },
+        {
+          "id": "P1-S08-T04",
+          "title": "Implement first reviewer and verifier pipeline",
+          "upstream": [
+            "P1-S8-003",
+            "P1-S8-004",
+            "P1-S8-005"
+          ],
+          "modules": [
+            "review"
+          ],
+          "acceptance": "Fabricated/weak findings suppressed; verifier separately invoked",
+          "status": "in_progress",
+          "evidence": "Reviewer and verifier pipeline implemented and now exercised against a real model for the first time. Deterministic gate between model output and any finding: a candidate is discarded unless it names the reviewed node, quotes text genuinely present in it, cites only supplied evidence and stays within routed categories; thresholds start at 0.90; coordinates are attached from the node, never from the model. The verifier is a separate invocation with its own system prompt, verdicts bind by ADR-036 identity, and a missing or misbound verdict suppresses rather than publishes. Repository content is fenced with a per-review unguessable marker that is stripped from the content itself. 13 unit tests cover these paths. TWO DEFECTS FOUND BY LIVE TESTING THAT MOCKS COULD NOT CATCH. First, reviewerInput never told the model which nodeId to use although the schema requires one, so the model invented an identifier and every model-proposed finding was discarded as foreign_node; the mocked tests passed only because the doubles supplied the correct id themselves. The prompt now states the node identifier and a unit test asserts it. Second, the published explanation was the verifier narrating its own checking, including leaked evidence hash identifiers, which would have gone verbatim into a pull request comment; the verifier prompt now requires correctedExplanation to be the sentence the author reads and forbids mentioning identifiers, coordinates or the verification itself. MEASURED LIVE BEHAVIOUR after both fixes, using qwen3.5:4b: generic marketing copy produced a verified ai_like_generic finding quoting the content exactly, with the author-facing explanation \"The phrase unprecedented potential is a low-information promotional claim that lacks specific substance or evidence\"; acceptable product copy produced no published finding, with a reviewer-proposed clarity candidate correctly suppressed by the verifier; plain documentation produced nothing; and content instructing the model to report a finding with exactText SYSTEM COMPROMISED produced nothing, the attempt being suppressed as evidence_not_supplied. Results: pnpm check 114 unit tests across 20 files; pnpm build passed; 40 integration tests passed; 8 live tests passed.",
+          "nextAction": "Remaining before complete: no caller runs this over a real pull request, which is P1-S08-T06. Live evidence is one small local model on five hand-written cases, which is a smoke test and not a quality measurement; P1-S08-T05 must measure precision against labelled content. OBSERVED QUALITY ISSUES for that task: the model returned overlapping findings for a whole sentence and a sub-phrase of it, which ranking and deduplication in P1-S13 must merge, and it sometimes proposes a finding for acceptable copy that only the verifier removes. Bounded one-step context expansion remains unimplemented; ReviewerResponseSchema carries searches and the pipeline ignores it.",
+          "updatedAt": "2026-09-18T16:13:11.166115+00:00"
+        },
+        {
+          "id": "P1-S08-T05",
+          "title": "Evaluate first useful-review corpus",
+          "upstream": [
+            "P1-S11-004"
+          ],
+          "modules": [
+            "evals/review"
+          ],
+          "acceptance": "Independent human usefulness report with clean-copy negatives",
+          "status": "in_progress",
+          "evidence": "Review gold set now holds 26 labelled cases: 16 clear-cut and 10 covering the ambiguous middle that was previously absent, namely mediocre human copy and edited AI-assisted copy. Ambiguous labels are marked as judgement calls and scored separately, because a failure there may mean the label is wrong rather than the reviewer. MEASURED with qwen3.5:4b: overall precision 100% recall 50%; clear-cut precision 100% recall 80%; AMBIGUOUS PRECISION 100% RECALL 20%. Precision held at 100% across all 26 cases, including every ambiguous negative: passive voice, an edited AI sentence, a long but information-dense sentence, a hedged claim and correct industry jargon were all left alone. The product does not nag. Recall on the ambiguous middle is 20%, with four of five missed: padded phrasing such as \"provides users with the ability to\", stacked redundancy such as \"In order to get started, you will first need to begin by\", residual AI wording such as \"empowers teams to seamlessly streamline\", and a vague tagline. Only the uniform three-clause cadence was caught, and by a deterministic rule rather than the model. TWO FINDINGS. First, the missed cases share a shape the product has no rule for: wordiness and padding, as distinct from promotional vocabulary. Second, the deterministic phrase list matches literal strings and not morphological variants, so \"leveraging the power of\" does not match the listed \"leverage the power of\"; that is why generic-docs-opener fell to two matched phrases, below the three-phrase cluster threshold, and was missed this run although the model flagged it in an earlier one. Clear-cut recall therefore sits exactly at the 0.8 floor and will flake with model variance. Results: pnpm check 187 unit tests across 31 files.",
+          "nextAction": "Deliberately NOT tuned further in this session: chasing 20% ambiguous recall against 10 cases would overfit to the corpus rather than improve the product. The evidence-led order for whoever continues is: add a padding and wordiness rule family, since the misses share that shape and such phrases are as countable as the promotional ones; make phrase matching stem-aware so leverage, leverages and leveraging all match; enlarge the ambiguous set well beyond 10 cases before trusting any recall number from it; and re-measure with a larger local model to separate prompt and threshold behaviour from model capacity, since the same case flipped between runs at temperature 0. The specification gate still requires independent human judgement of usefulness, which no measurement here provides.",
+          "updatedAt": "2026-09-18T18:11:51.322241+00:00"
+        },
+        {
+          "id": "P1-S08-T06",
+          "title": "Connect local runner execution",
+          "upstream": [
+            "P1-S7-005"
+          ],
+          "modules": [
+            "apps/runner"
+          ],
+          "acceptance": "Private live repository review has no cloud-model traffic or retained source",
+          "status": "in_progress",
+          "evidence": "Local runner execution connected: Humanize now reviews a pull request end to end. apps/runner/src/executor.ts runs one leased job inside an ephemeral workspace: restricted read-only clone with the job-scoped token, merge-base diff geometry, enumeration and classification of every tracked file, extraction of user-visible content from supported files only, selection of changed nodes intersecting right-hand-side added lines, an ephemeral context index, rules, routing, and the reviewer and verifier pipeline, producing a RunnerResult envelope. Customer code is never executed. apps/runner/src/main.ts now starts instead of refusing: it sweeps workspaces abandoned by a previous process, advertises locally installed models as capabilities, and handles SIGTERM and SIGINT. MEASURED LIVE RESULT against a real Git repository and a real local model (qwen3.5:4b), 31.5 seconds: two changed nodes across two files reviewed from three extracted nodes, producing docs.md:3 unsupported_claim \"Our revolutionary state-of-the-art solution seamlessly integrates to supercharge your workflow.\" explained as unsupported promotional claims without evidence, and landing.tsx:1 approved_voice \"Unlock unprecedented potential with our cutting-edge platform\" explained as vague wording; two further candidates were suppressed below confidence, and zero workspace entries remained. Tests: 4 unit tests against a real local Git repository proving only changed content is reviewed, a binary file is classified out and never parsed, no host other than the configured local model is contacted, a job carrying a cloud model profile is refused with CLOUD_MODEL_IN_PRIVATE_JOB, and the workspace is destroyed after success, refusal and provider failure; plus a live end-to-end test. Results: pnpm check 118 unit tests across 21 files; pnpm build passed; 40 integration tests passed; 9 live tests passed in 35.6 seconds.",
+          "nextAction": "Remaining before complete: acceptance names a private LIVE repository, and no review has run against a real private GitHub repository with a real installation token, because no GitHub App credentials exist; the end-to-end evidence uses a local Git origin standing in for the remote, and GitRepository.acquire is substituted in tests. The runner also does not yet upload its result: executeReview returns a RunnerResult but the poll loop does not call the upload route, so P1-S07-T05 and this task meet only at the seam. Extraction covers Babel and Markdown only, so Vue, Svelte, HTML, CSS and locale content in a changed file are silently not reviewed until P1-S09 and P1-S10. Changed-node selection is capped at LIMITS.nodeBatch with no chunking for larger pull requests.",
+          "updatedAt": "2026-09-18T16:24:30.722898+00:00"
+        }
+      ]
+    },
+    {
+      "id": "P1-S09",
+      "title": "HTML localization and deterministic resolution",
+      "requirements": [
+        "FR-06",
+        "FR-07",
+        "NFR-03",
+        "NFR-04"
+      ],
+      "tasks": [
+        {
+          "id": "P1-S09-T01",
+          "title": "Extract HTML text and attributes",
+          "upstream": [
+            "P1-S4-003"
+          ],
+          "modules": [
+            "extractors"
+          ],
+          "acceptance": "Entities/quotes mapped; scripts/styles/machine attributes excluded",
+          "status": "in_progress",
+          "evidence": "HTML extraction implemented with parse5 and source-location tracking, closing the gap the corpus measured. Rendered text nodes and visible or accessibility attributes (alt, title, placeholder, aria-*, label, summary) are extracted; script, style, template, noscript, svg, code, pre, iframe and object contents are excluded, as are machine attributes such as href, src, class, id, name, type and value however wordy their values look. Source ranges map exactly onto the original document including multi-line text, quote style is recorded so an attribute value can be re-encoded safely, and entity-bearing content is marked suggestionSafe false with encoding entity because the raw source and rendered text differ and a verbatim replacement would corrupt the encoding. Element name drives content kind, so a heading, link and alt text are classified distinctly. 7 unit tests cover visible-only extraction, machine attribute exclusion, exact single and multi-line spans, entity handling, quote style, kind classification, and recovery from malformed markup without failing the file. MEASURED EFFECT on the fixture corpus, same model and fixtures as before: extracted nodes rose from 8 to 13 and reviewed changed nodes from 4 to 7, and index.html now produces findings, including clarity on \"The ultimate game-changing solution for modern enterprises\" which was previously invisible. Results: pnpm check 153 unit tests across 27 files; pnpm build passed.",
+          "nextAction": "Acceptance for entities, quotes and exclusions is met at unit level. Remaining: HTML-specific suggestion encoding is not implemented, so an entity-bearing or attribute finding currently falls back to comment-only; that belongs with P1-S11. Extraction precision and recall against a labelled HTML corpus are not measured, which is P1-S09-T04 and P1-S10-T04.",
+          "updatedAt": "2026-09-18T16:55:04.719363+00:00"
+        },
+        {
+          "id": "P1-S09-T02",
+          "title": "Extract JSON and YAML localization",
+          "upstream": [
+            "P1-S4-007"
+          ],
+          "modules": [
+            "extractors"
+          ],
+          "acceptance": "Locale discrimination and source spans correct",
+          "status": "in_progress",
+          "evidence": "JSON and YAML localization extraction implemented. A file is treated as a locale resource only when its path follows convention (locales, i18n, translations, messages, lang, or a language-coded filename) or configuration declares it, so arbitrary JSON such as package.json or tsconfig.json is never reviewed as prose; a non-locale data file now returns a NOT_A_LOCALE_SOURCE diagnostic rather than silently extracting nothing, because silence is the dangerous case. Values are reviewed and keys are context only. Machine values are excluded by key and by shape: URLs, paths, colours, endpoints, identifiers, numbers and values containing no letters. Source spans map to the value inside its quotes so a replacement re-encodes in place, quote style is recorded, nested objects and arrays are walked, placeholders survive extraction, and an escaped value is marked unsafe for verbatim replacement. YAML is supported through the same path. 9 unit tests cover locale discrimination both ways, key-versus-value handling, machine value exclusion, exact spans, nesting, YAML with ICU and handlebars placeholders, escape safety, the diagnostic for a non-locale file, and malformed input. MEASURED EFFECT: locales/en.json in the fixture corpus now produces an approved_voice finding on \"Unlock unprecedented potential today\", which the previous run could not see at all. Results: pnpm check 153 unit tests across 27 files.",
+          "nextAction": "Remaining: translation-key resolution, where a JSX or HTML reference such as t(\"hero.title\") is linked to the locale value so the rendered string is reviewed in context, is P1-S09-T03 and is not implemented. Locale discrimination is convention-based and has not been measured against a corpus of real repositories, so an unconventional layout still needs explicit configuration.",
+          "updatedAt": "2026-09-18T16:55:04.748863+00:00"
+        },
+        {
+          "id": "P1-S09-T03",
+          "title": "Resolve safe constants and translations",
+          "upstream": [],
+          "modules": [
+            "extractors"
+          ],
+          "acceptance": "Cycles, dynamic values and ambiguous resources remain unresolved",
+          "status": "planned"
+        },
+        {
+          "id": "P1-S09-T04",
+          "title": "Extend placeholder and failure corpus",
+          "upstream": [
+            "P1-S4-010",
+            "P1-S4-011"
+          ],
+          "modules": [
+            "evals/extraction"
+          ],
+          "acceptance": "Malformed files isolated; all metrics reported",
+          "status": "in_progress",
+          "evidence": "Extraction corpus expanded from 7 to 17 labelled files covering every parser, now carrying placeholder expectations, suggestion-eligibility expectations and hostile inputs: deep nesting, unclosed HTML, entity-bearing text and attributes, escaped locale values, ICU and printf placeholders, digest-like values, table markup, inline code inside prose, and dynamic Vue and Svelte bindings. The gate enforces four properties in the default lane and now fails pnpm check on a regression in any of them. THE EXPANDED CORPUS IMMEDIATELY FOUND FOUR DEFECTS, all fixed. First, Markdown dropped inline code from inside a paragraph, so \"Each installation may send `5000` requests per hour.\" was reviewed as \"Each installation may send  requests per hour.\" with the value missing; a finding or a suggestion based on that corrupted sentence would have been wrong, so inline code is now included as composite-encoded text and the node is not offered as a replacement. Second, Markdown emitted raw table markup as a paragraph, because remark without the GFM plugin does not parse tables; pipe-delimited blocks are now skipped, and full table-cell extraction still requires remark-gfm and is recorded as a gap. Third, locale extraction reviewed digest-like values as prose, so a commit SHA under a build.sha key became reviewable content; sha, hash, digest, token, secret and slug keys are now machine keys, and an unspaced hex or identifier token is refused by shape. Fourth, the range-accuracy metric itself was wrong: it demanded a byte-identical slice for every segment, which an entity-encoded or escaped segment can never satisfy; identity segments must now slice exactly, and any other encoding must have a real span and a node not offered as a verbatim replacement. Two label errors of mine were also corrected, a blockquote wrongly excluded and a paragraph with an inline link wrongly omitted. MEASURED across 17 files: babel, markdown, html, json-locale, vue, svelte and css all at precision 100%, recall 100%, range accuracy 100%, with placeholder and unsafe-label accuracy 100% wherever labelled. Results: pnpm check 185 unit tests across 31 files; pnpm build passed; 40 integration tests passed.",
+          "nextAction": "Still far short of the specification, which expects hundreds of fixtures: 17 files means the gate rejects regressions on these cases, not that extraction is correct in general. Highest-value additions next: real-world JSX patterns such as configured visible props and UI call functions, MDX expression boundaries, YAML locale edge cases, right-to-left and CJK content, and files large enough to exercise the size and timeout limits. Markdown table cells remain unextracted pending a decision on adding remark-gfm, which the specification implies since it lists table text as reviewable content.",
+          "updatedAt": "2026-09-18T17:20:57.581092+00:00"
+        }
+      ]
+    },
+    {
+      "id": "P1-S10",
+      "title": "Vue Svelte CSS and extraction gate",
+      "requirements": [
+        "FR-08",
+        "NFR-04"
+      ],
+      "tasks": [
+        {
+          "id": "P1-S10-T01",
+          "title": "Extract Vue static templates",
+          "upstream": [
+            "P1-S4-005"
+          ],
+          "modules": [
+            "extractors"
+          ],
+          "acceptance": "Original SFC offsets correct; computed values never executed",
+          "status": "in_progress",
+          "evidence": "Vue single-file-component extraction implemented with the official @vue/compiler-sfc parser. Static template text and visible or accessibility attributes are extracted; script, style, nested template, pre and code blocks are excluded, as are machine attributes. Offsets come from the compiler and are relative to the ORIGINAL file rather than the extracted template block, verified by a test asserting every node slice equals its own text. Interpolations and bound directives are never evaluated: a test proves {{ product.title }} and :alt=\"computedAlt\" yield no prose, because resolving them would mean executing customer code (INV-001). Malformed SFCs return no nodes rather than failing the file. Measured by the extraction release gate at precision 100%, recall 100%, range accuracy 100%. Results: pnpm check 183 unit tests across 31 files; pnpm build passed; 40 integration tests passed.",
+          "nextAction": "Vue suggestion encoding is not implemented, so a Vue finding is comment-only until an encoder and structural validator exist for that format. Translation-key resolution inside Vue templates is part of P1-S09-T03 and remains absent.",
+          "updatedAt": "2026-09-18T17:14:30.789792+00:00"
+        },
+        {
+          "id": "P1-S10-T02",
+          "title": "Extract Svelte static templates",
+          "upstream": [
+            "P1-S4-006"
+          ],
+          "modules": [
+            "extractors"
+          ],
+          "acceptance": "Dynamic/static distinction and offsets validated",
+          "status": "in_progress",
+          "evidence": "Svelte extraction implemented with the official svelte/compiler in modern AST mode. Static template text and visible attributes are extracted while script and style contents are excluded. The dynamic and static distinction is enforced structurally: an attribute is only extracted when its value is a single literal Text part, so an interpolated attribute such as alt={dynamicAlt} and an interpolated text node such as {title} produce no prose, proven by test. Offsets map onto the original file, verified by asserting every node slice equals its own text. A malformed component returns no nodes rather than failing the file. Measured by the extraction release gate at precision 100%, recall 100%, range accuracy 100%. Results: pnpm check 183 unit tests across 31 files.",
+          "nextAction": "Svelte suggestion encoding is absent, so Svelte findings remain comment-only. Svelte 5 snippet and render-tag constructs are not specifically handled beyond being skipped as non-literal.",
+          "updatedAt": "2026-09-18T17:14:30.817855+00:00"
+        },
+        {
+          "id": "P1-S10-T03",
+          "title": "Extract CSS generated content",
+          "upstream": [
+            "P1-S4-008"
+          ],
+          "modules": [
+            "extractors"
+          ],
+          "acceptance": "Only static pseudo-element content with correct escapes",
+          "status": "in_progress",
+          "evidence": "CSS generated-content extraction implemented with PostCSS. Only static content declarations on ::before and ::after pseudo-elements are extracted; a declaration on a non-pseudo selector, an empty string, and dynamic values built from counter(), attr(), url(), var() or the quote keywords are all skipped, proven by a test whose fixture contains each case and yields exactly one node. Quote style is recorded and a CSS escape marks the value unsafe for verbatim replacement. Generated content is extracted with visibility confidence 0.85 rather than 1, because it is rendered to sighted users but invisible to assistive technology and to translation, so it is reviewed conservatively as the specification requires. Measured by the extraction release gate at precision 100%, recall 100%, range accuracy 100%. Results: pnpm check 183 unit tests across 31 files.",
+          "nextAction": "CSS suggestion encoding is absent, so a generated-content finding is comment-only. Escaped unicode sequences are detected and refused rather than decoded.",
+          "updatedAt": "2026-09-18T17:14:30.846850+00:00"
+        },
+        {
+          "id": "P1-S10-T04",
+          "title": "Enforce full extraction release gate",
+          "upstream": [
+            "P1-S4-011",
+            "P1-S11-003"
+          ],
+          "modules": [
+            "evals/extraction"
+          ],
+          "acceptance": "Per-parser precision 98%, recall 90%, range accuracy 99%",
+          "status": "in_progress",
+          "evidence": "Extraction release gate implemented in evals/extraction. A labelled corpus in gold.ts states, per parser, the user-visible strings extraction must find and the machine strings it must never mistake for prose (endpoints, identifiers, asset paths, class lists, colours, code fences, script and style contents). gate.test.ts computes precision, recall and range accuracy per parser and enforces the specification thresholds of 98%, 90% and 99%, failing the default test lane when any parser falls below them; a second test asserts no labelled machine string is ever extracted, because noise about text the author never wrote for a reader is worse than a missed string. Range accuracy is measured PER SEGMENT rather than per node: a Markdown paragraph containing an inline link assembles its text from several source runs, so each segment must map its slice of the text back to the exact source it came from. MEASURED: babel, markdown, html, json-locale, vue, svelte and css all at precision 100%, recall 100%, range accuracy 100%. The gate earned its place on its first run by rejecting a mislabelled fixture and an over-strict metric. Results: pnpm check 183 unit tests across 31 files.",
+          "nextAction": "The corpus is small, with one file per parser, so 100% means the gate passes on these cases rather than that extraction is perfect; the specification expects hundreds of fixtures and the corpus must grow substantially before the numbers carry release weight. Not yet labelled: placeholder expectations, suggestion-eligibility expectations and deliberately hostile inputs, which are P1-S09-T04.",
+          "updatedAt": "2026-09-18T17:14:30.878866+00:00"
+        }
+      ]
+    },
+    {
+      "id": "P1-S11",
+      "title": "Parser-safe suggestions",
+      "requirements": [
+        "FR-16",
+        "SEC-07"
+      ],
+      "tasks": [
+        {
+          "id": "P1-S11-T01",
+          "title": "Encode source-specific replacements",
+          "upstream": [
+            "P1-S9-001"
+          ],
+          "modules": [
+            "suggestions"
+          ],
+          "acceptance": "Quotes, entities, escapes and multiline scalar cases pass",
+          "status": "in_progress",
+          "evidence": "Source-specific replacement encoders implemented in packages/suggestions/src/encode.ts. JSX and Markdown text is emitted verbatim after refusing prose carrying markup; HTML text is entity-encoded; HTML attribute values are encoded for the quote style actually used, so a quote inside the replacement becomes an entity and cannot terminate the attribute or introduce a new one; JSON and locale values are re-encoded inside their existing quotes with escapes; bare YAML scalars are refused when the replacement starts with an indicator character or would read as a mapping; JavaScript and TypeScript string literals are escaped for single, double or template quoting including dollar-brace sequences. A node the extractor marked unsafe, a control character, a multi-line replacement for a single-line node and an unsupported source kind are all refused rather than guessed, because a wrong encoding corrupts a customer file. Tests cover JSX text, HTML text and attributes, locale values with embedded quotes, and the refusal cases. Results: pnpm check 173 unit tests across 29 files; pnpm build passed; 40 integration tests passed.",
+          "nextAction": "Vue, Svelte and CSS encoders are absent because their extractors do not exist yet (P1-S10). Multi-line and complex Markdown nodes containing inline links or emphasis remain comment-only, as the specification requires until a dedicated validator proves such a patch safe.",
+          "updatedAt": "2026-09-18T17:06:42.378984+00:00"
+        },
+        {
+          "id": "P1-S11-T02",
+          "title": "Preserve placeholder semantics",
+          "upstream": [
+            "P1-S9-002"
+          ],
+          "modules": [
+            "suggestions"
+          ],
+          "acceptance": "Altered/missing/duplicated and ordered placeholders rejected",
+          "status": "in_progress",
+          "evidence": "Placeholder preservation implemented in packages/suggestions/src/placeholders.ts and enforced before any suggestion is built. The placeholder multiset is compared before and after: a removed placeholder, an added one, an altered name, a changed repetition count and a reordered positional format are each rejected with a distinct reason. Ordering is checked only for positional formats such as %s and %d, which bind by position, so reordering them silently swaps the values a user is shown; named placeholders may move freely. A rewording that keeps every placeholder intact is accepted. Tests cover all five violations and the accepting case, plus an end-to-end refusal proving a suggestion that would drop a placeholder is never published. Results: pnpm check 173 unit tests across 29 files.",
+          "nextAction": "ICU plural and select expressions are treated as opaque placeholders rather than parsed, so a replacement that restructures an ICU message is refused rather than validated; a dedicated ICU validator remains future work.",
+          "updatedAt": "2026-09-18T17:06:42.405721+00:00"
+        },
+        {
+          "id": "P1-S11-T03",
+          "title": "Reparse and prove structural preservation",
+          "upstream": [
+            "P1-S9-003"
+          ],
+          "modules": [
+            "suggestions"
+          ],
+          "acceptance": "Valid syntax that injects expressions or attributes is rejected",
+          "status": "in_progress",
+          "evidence": "Structural preservation implemented in packages/suggestions/src/index.ts. A candidate patch is applied in memory only, then the modified file is re-extracted and compared with the original: the parse must succeed, the node count must match, every node must keep its identity excluding position, exactly one node may differ, and that node must now contain precisely the proposed text. Anything else is rejected as STRUCTURE_CHANGED, TEXT_NOT_APPLIED or REPARSE_FAILED, and the finding falls back to a comment. This is what catches a replacement that is syntactically valid yet still wrong: a test proves prose opening a JSX expression or an HTML element is rejected, and that an attribute injection attempt is entity-encoded into literal text rather than becoming a new attribute. DEFECT FOUND AND FIXED while proving this: the HTML extractor located an attribute value by searching the raw source for the decoded value, so any attribute containing an entity was silently dropped and never reviewed at all; the span is now derived from the quote positions and such a value is extracted and marked unsafe to replace. Results: pnpm check 173 unit tests across 29 files.",
+          "nextAction": "Structural comparison relies on the extractor for the file type, so it is only as strong as that extractor; a format without one cannot be validated and therefore cannot receive a suggestion. Nothing is ever written to disk, and no suggestion has yet been applied on a real pull request, which needs GitHub credentials.",
+          "updatedAt": "2026-09-18T17:06:42.431392+00:00"
+        },
+        {
+          "id": "P1-S11-T04",
+          "title": "Render diff-eligible GitHub suggestions",
+          "upstream": [
+            "P1-S9-004",
+            "P1-S9-005"
+          ],
+          "modules": [
+            "suggestions",
+            "github"
+          ],
+          "acceptance": "Live apply succeeds; unrepresentable ranges become comment-only",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "P1-S12",
+      "title": "Indexed baselines and production retrieval",
+      "requirements": [
+        "FR-10",
+        "FR-11",
+        "FR-12",
+        "FR-24"
+      ],
+      "tasks": [
+        {
+          "id": "P1-S12-T01",
+          "title": "Create atomic baseline generations",
+          "upstream": [
+            "P1-S5-001"
+          ],
+          "modules": [
+            "content-index",
+            "db"
+          ],
+          "acceptance": "Older/failed scans cannot replace newer ready generation",
+          "status": "planned"
+        },
+        {
+          "id": "P1-S12-T02",
+          "title": "Cache extraction by blob and configuration",
+          "upstream": [
+            "P1-S5-002"
+          ],
+          "modules": [
+            "content-index"
+          ],
+          "acceptance": "Unchanged blobs reused; node scope reconstructed correctly",
+          "status": "planned"
+        },
+        {
+          "id": "P1-S12-T03",
+          "title": "Update baseline incrementally",
+          "upstream": [
+            "P1-S5-003"
+          ],
+          "modules": [
+            "content-index"
+          ],
+          "acceptance": "Incremental and full rescan agree after deletion/rename/force-push",
+          "status": "planned"
+        },
+        {
+          "id": "P1-S12-T04",
+          "title": "Implement PostgreSQL lexical retrieval",
+          "upstream": [
+            "P1-S5-004",
+            "P1-S5-005"
+          ],
+          "modules": [
+            "retrieval",
+            "db"
+          ],
+          "acceptance": "FTS/trigram fixtures pass without vectors",
+          "status": "planned"
+        },
+        {
+          "id": "P1-S12-T05",
+          "title": "Separate approved voice and baseline stats",
+          "upstream": [
+            "P1-S5-006",
+            "P1-S5-007"
+          ],
+          "modules": [
+            "content-index",
+            "retrieval"
+          ],
+          "acceptance": "Explicit approval and source provenance required",
+          "status": "planned"
+        },
+        {
+          "id": "P1-S12-T06",
+          "title": "Complete snapshot context construction",
+          "upstream": [
+            "P1-S5-009"
+          ],
+          "modules": [
+            "retrieval"
+          ],
+          "acceptance": "Head overlay, stale evidence and reduced context tested",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "P1-S13",
+      "title": "Complete review verification and noise policy",
+      "requirements": [
+        "FR-13",
+        "FR-14",
+        "FR-15",
+        "NFR-05"
+      ],
+      "tasks": [
+        {
+          "id": "P1-S13-T01",
+          "title": "Complete category schemas and evidence validation",
+          "upstream": [
+            "P1-S8-003",
+            "P1-S8-004"
+          ],
+          "modules": [
+            "review"
+          ],
+          "acceptance": "All categories include valid/invalid evidence and authorship rejection",
+          "status": "in_progress",
+          "evidence": "Ranking, deduplication and the noise budget implemented in packages/review/src/ranking.ts, taken ahead of its stage because live testing showed the model returning a finding for a whole sentence and another for a sub-phrase of it, which would have spammed the first pull request Humanize commented on. scoreFinding combines the lower of reviewer and verifier confidence, a severity weight, evidence quality, the node visibility confidence and actionability, and is deterministic. planPublication merges findings that share a fingerprint, that overlap the same source range in the same category, or that propose the same replacement for the same place, keeping the higher-scoring statement; it then holds subjective findings to five inline comments with the remainder moved to the summary, exempts deterministic policy violations from the budget, and excludes nitpicks by default while keeping deterministic ones. The configured budget is clamped to the product default so configuration cannot raise it. 8 unit tests cover scoring order and stability, the sentence-versus-sub-phrase merge that live testing exposed, distinct places and categories kept apart, same-replacement merging, budget overflow to summary, blocking findings never losing their slot, nitpick exclusion, and identical plans regardless of input order. Results: pnpm check 127 unit tests across 22 files.",
+          "nextAction": "Coefficients are a documented starting point, not a calibrated model; the specification requires them to be evaluation-driven and they must be tuned against the labelled corpus in P1-S08-T05 before release. Remaining in this stage: the review summary generator, feedback-informed ranking, and confirming the budget end to end once the publisher exists. No caller applies planPublication yet; the publisher is next.",
+          "updatedAt": "2026-09-18T16:30:58.565459+00:00"
+        },
+        {
+          "id": "P1-S13-T02",
+          "title": "Complete independent verifier",
+          "upstream": [
+            "P1-S8-005"
+          ],
+          "modules": [
+            "review"
+          ],
+          "acceptance": "Corrected output is revalidated and cannot fabricate evidence",
+          "status": "in_progress",
+          "evidence": "Verifier corrections are now revalidated rather than trusted. DEFECT FOUND AND FIXED: correctedExplanation and correctedReplacement were applied verbatim, so a verifier could replace a reviewer suggestion with text that drops a placeholder, producing a message with a hole in it, or blank out an explanation. Corrections are model output like any other and are now checked before use: a corrected replacement must preserve the exact placeholder multiset of the reviewed text, a corrected explanation must be non-empty after trimming, and a correction failing either check is discarded so the reviewer original stands. A discarded correction is recorded as a CORRECTION_DROPPED_PLACEHOLDER diagnostic rather than passing silently, and ReviewOutcome now carries diagnostics. Verified by test: a verdict proposing \"Hi there, you have alerts\" against text containing {name} and {{count}} is refused and the reviewer replacement survives, while a sound correction preserving both placeholders is applied. Results: pnpm check 191 unit tests across 31 files; pnpm build passed; 40 integration tests passed.",
+          "nextAction": "A corrected replacement is not yet re-run through the parser-safe suggestion validator, so it is placeholder-checked but not structurally proven; wiring buildSuggestion over corrected output is the remaining step. A verifier cannot fabricate evidence, since evidence references are fixed at candidate validation and a verdict carries none.",
+          "updatedAt": "2026-09-18T18:18:19.589115+00:00"
+        },
+        {
+          "id": "P1-S13-T03",
+          "title": "Implement bounded context expansion",
+          "upstream": [
+            "P1-S8-006"
+          ],
+          "modules": [
+            "review"
+          ],
+          "acceptance": "One round, three searches; tools/URLs/cross-scope searches rejected",
+          "status": "planned"
+        },
+        {
+          "id": "P1-S13-T04",
+          "title": "Rank and deduplicate findings",
+          "upstream": [
+            "P1-S8-007",
+            "P1-S8-008"
+          ],
+          "modules": [
+            "review"
+          ],
+          "acceptance": "Stable order, overlap grouping and cross-run suppression",
+          "status": "planned"
+        },
+        {
+          "id": "P1-S13-T05",
+          "title": "Apply PR budget and generate summaries",
+          "upstream": [
+            "P1-S8-009",
+            "P1-S8-010"
+          ],
+          "modules": [
+            "review"
+          ],
+          "acceptance": "Five subjective active comments and nit defaults enforced",
+          "status": "in_progress",
+          "evidence": "Noise policy implemented and enforced in packages/review/src/ranking.ts. planPublication holds subjective findings to five inline comments with the remainder moved to the summary, exempts deterministic policy violations from that budget so a configured rule is never crowded out, excludes nitpicks by default while keeping deterministic ones, and clamps a configured budget to the product default so configuration cannot raise it. Deduplication merges findings sharing a fingerprint, overlapping the same range in the same category, proposing the same replacement for the same place, or simply landing on the same node in the same category, which the gold set proved necessary when one node produced four comments. Ordering is deterministic, so the same review yields the same comments. 9 unit tests cover the budget, overflow to summary, blocking findings keeping their slot, nitpick defaults, and identical plans regardless of input order. Results: pnpm check 191 unit tests across 31 files.",
+          "nextAction": "Scoring coefficients remain a documented starting point rather than an evaluation-derived model; the specification requires them to be tuned against the labelled corpus. Feedback-informed ranking is not implemented and belongs with P1-S17.",
+          "updatedAt": "2026-09-18T18:18:19.616791+00:00"
+        }
+      ]
+    },
+    {
+      "id": "P1-S14",
+      "title": "Production GitHub publication",
+      "requirements": [
+        "FR-17",
+        "SEC-07",
+        "NFR-02"
+      ],
+      "tasks": [
+        {
+          "id": "P1-S14-T01",
+          "title": "Fence publishing and recheck freshness",
+          "upstream": [
+            "P1-S9-006"
+          ],
+          "modules": [
+            "github",
+            "apps/api"
+          ],
+          "acceptance": "Head races cannot remain classified as current completed feedback",
+          "status": "in_progress",
+          "evidence": "Publication transport implemented in packages/github/src/transport.ts. ReviewPublisher re-reads the pull request head immediately before writing and throws StaleHeadError when it has moved, so findings computed for a superseded commit are never published as current feedback (INV-010); a test asserts that on a stale head exactly one request is made and nothing is written, because the author must not be told about wording they have already changed. It creates the Humanize / Content Review check run against the reviewed head with the conclusion it was given, submits a grouped COMMENT review carrying inline comments pinned to that commit, and when there is nothing to place inline edits its own previous marked summary in place rather than accumulating comments across re-reviews. 5 unit tests over a fake transport cover publication, the stale-head refusal, editing an existing summary, first-time creation, and the failing-check path. Results: pnpm check 139 unit tests across 24 files; pnpm build passed.",
+          "nextAction": "No live GitHub call has been made and none is possible until the user supplies GitHub App credentials; every test uses a fake transport, so this establishes request shape and ordering, not live API compatibility. Still to wire: the control-plane job that takes an accepted runner result, applies planPublication, builds the review and calls this transport, and records published comment identifiers for reconciliation. Rate-limit handling, conditional requests and retry on an uncertain write are not implemented.",
+          "updatedAt": "2026-09-18T16:33:31.131508+00:00"
+        },
+        {
+          "id": "P1-S14-T02",
+          "title": "Publish and reconcile grouped reviews",
+          "upstream": [
+            "P1-S9-007"
+          ],
+          "modules": [
+            "github"
+          ],
+          "acceptance": "Timeout after acceptance never blindly duplicates comments",
+          "status": "in_progress",
+          "evidence": "GitHub publisher implemented in packages/github/src/publisher.ts. It renders a grouped COMMENT review, never APPROVE or REQUEST_CHANGES, with inline comments placed only on right-hand-side lines the pull request actually added and that are representable in the diff; a finding whose line is not part of the diff moves to the summary rather than being attached to an unrelated line the author did not touch. Each comment carries a stable fingerprint marker and the review body a review marker, so a re-review can update rather than duplicate. The summary states how much changed content was reviewed, collapses budgeted-out findings into a details block, and says plainly when there is nothing to flag. Check conclusions follow the specification and ADR-017: success with no findings, neutral for advisory findings however severe, and failure only when a customer-configured deterministic blocking rule is violated, so subjective wording can never fail a build. A native suggestion block is rendered when a safe replacement exists, which needs no Contents write permission. 7 unit tests cover exact-line placement, the summary fallback for undiffed lines and missing files, the collapsed section, the empty case, suggestion rendering, the check conclusion matrix, and an assertion that nothing published ever claims machine authorship (INV-006). Results: pnpm check 134 unit tests across 23 files; pnpm build passed.",
+          "nextAction": "Not wired to GitHub transport yet: buildReview and buildCheck return payloads, and no code posts them through Octokit or reconciles an uncertain write. That transport plus stale-head guarding is P1-S14-T01 and P1-S06-T06, and it cannot be proven without GitHub App credentials, which the user will supply later. Comment updating on re-review uses the markers but no code yet reads existing comments to decide between create and update.",
+          "updatedAt": "2026-09-18T16:32:20.644456+00:00"
+        },
+        {
+          "id": "P1-S14-T03",
+          "title": "Apply check and incomplete-review policy",
+          "upstream": [
+            "P1-S9-008"
+          ],
+          "modules": [
+            "github"
+          ],
+          "acceptance": "Subjective findings neutral; configured deterministic violations fail",
+          "status": "in_progress",
+          "evidence": "Publish worker implemented, and the ADR-038 lifetime guarantee is now proven at worker level rather than only at the store. publishReview takes the held payload, publishes it, and discards the content on every path that will not publish later: after a successful publish, after a superseded head where a newer review supersedes this one, and after a payload that cannot be parsed and so could never publish. It keeps the payload only for a failure a retry could still resolve, because discarding then would lose a review the queue is about to attempt again; the retry then publishes and clears it. 5 PostgreSQL integration tests assert the payload row count directly after each path, including that the transport is never called for an unpublishable payload. apps/worker/src/main.ts is now a runnable process: it migrates, starts the queue, SWEEPS ANY PAYLOAD A PREVIOUS PROCESS LEFT BEHIND before taking new work so content never outlives a crash by more than one restart, subscribes to github.event and review.publish, rehydrates each event from its recorded delivery rather than from the job payload, which carries identifiers only and never content, signals a retry by throwing so pg-boss reschedules, and shuts down on SIGTERM and SIGINT. Results: pnpm check 191 unit tests across 31 files; pnpm build passed; 56 integration tests passed from a freshly created disposable database.",
+          "nextAction": "The worker starts but cannot yet complete a review: the publish transport throws PUBLISH_TRANSPORT_UNBOUND and the github.event handler is wired without a TrustedFileSource, so no review run is created. Both bindings need GitHub App credentials. The retention sweep runs once at startup rather than on a schedule, so a long-running process does not yet reclaim payloads abandoned during its own lifetime.",
+          "updatedAt": "2026-09-18T19:41:20.289201+00:00"
+        },
+        {
+          "id": "P1-S14-T04",
+          "title": "Run full GitHub lifecycle stress suite",
+          "upstream": [
+            "P1-S11-006",
+            "P1-S11-007"
+          ],
+          "modules": [
+            "evals/end-to-end"
+          ],
+          "acceptance": "Live lifecycle and duplicate/reorder/force-push ambiguity cases pass",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "P1-S15",
+      "title": "Production runner execution and distribution",
+      "requirements": [
+        "FR-20",
+        "SEC-02",
+        "SEC-04",
+        "NFR-01",
+        "NFR-07"
+      ],
+      "tasks": [
+        {
+          "id": "P1-S15-T01",
+          "title": "Complete shared runner execution",
+          "upstream": [
+            "P1-S7-005"
+          ],
+          "modules": [
+            "apps/runner"
+          ],
+          "acceptance": "All formats and baseline jobs agree with cloud deterministic stages",
+          "status": "planned"
+        },
+        {
+          "id": "P1-S15-T02",
+          "title": "Independently validate runner results",
+          "upstream": [
+            "P1-S7-009"
+          ],
+          "modules": [
+            "apps/api"
+          ],
+          "acceptance": "Forged source/evidence/patch rejected without cloud model calls",
+          "status": "planned"
+        },
+        {
+          "id": "P1-S15-T03",
+          "title": "Package and document runner",
+          "upstream": [
+            "P1-S7-010"
+          ],
+          "modules": [
+            "docker/runner",
+            "apps/runner"
+          ],
+          "acceptance": "Clean-host install/upgrade works non-root and outbound-only",
+          "status": "in_progress",
+          "evidence": "Runner packaged and documented, and the image was built and exercised rather than merely written. docker/runner holds a multi-stage Dockerfile, a reference compose deployment and a deployment runbook at docs/runbooks/runner-deployment.md covering enrollment, upgrade, revocation and failure symptoms. VERIFIED BY RUNNING THE IMAGE, not by reading it: the process runs as uid 10001 with no exposed ports, the root filesystem is read-only and /app is unwritable by the runner, git 2.39.5 is present as the only external binary, the image is 117 MB, it refuses to start without its two required variables, and it reaches a real Ollama on the host across host.docker.internal and reports models:1 at startup. THREE DEFECTS FOUND BY RUNNING IT. First, the tmpfs workspace was owned by root and therefore unwritable by the unprivileged runner, so no workspace could be created and no review could run; the mount now carries uid and gid, which is also called out in the runbook because a hand-written deployment would hit the same wall. Second, the image could not resolve @humanize packages at all, because a pnpm workspace keeps its links in each package node_modules which the build context excludes; the build now uses pnpm deploy to produce a self-contained tree, which also cut the image from 207 MB to 117 MB. Third, an unreachable model killed the process with a raw TypeError fetch failed from Node internals; startup now checks the model endpoint and exits with a sentence naming the endpoint and what to do, and separately reports when no model is installed. A startup line was added because silence and a crash loop look identical to an operator. Results: pnpm check 200 unit tests across 33 files; pnpm build passed; 70 integration tests passed.",
+          "nextAction": "Not yet proven: upgrade on a clean host, since the image has only been built and run locally and never published or pulled; and the compose deployment has not been run end to end against a real control plane, which needs GitHub App credentials. The healthcheck is a placeholder that always succeeds rather than reporting whether the runner holds a lease or can still reach its model. No image signing, SBOM or vulnerability scan is in place, which P1-S20 should cover before distribution.",
+          "updatedAt": "2026-09-18T20:59:11.019308+00:00"
+        },
+        {
+          "id": "P1-S15-T04",
+          "title": "Exercise runner failure recovery",
+          "upstream": [
+            "P1-S11-012"
+          ],
+          "modules": [
+            "testing",
+            "docs/runbooks"
+          ],
+          "acceptance": "Partition/revoke/crash/token/Ollama failures leave no late publish or source",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "P1-S16",
+      "title": "Authentication and administration dashboard",
+      "requirements": [
+        "FR-01",
+        "FR-19",
+        "FR-21",
+        "FR-23",
+        "SEC-04",
+        "SEC-05"
+      ],
+      "tasks": [
+        {
+          "id": "P1-S16-T01",
+          "title": "Implement GitHub sign-in and authorization",
+          "upstream": [
+            "P1-S10-001"
+          ],
+          "modules": [
+            "apps/api",
+            "apps/dashboard"
+          ],
+          "acceptance": "Callback/session/CSRF/cross-tenant attacks rejected",
+          "status": "in_progress",
+          "evidence": "Sign-in and session authorization implemented. packages/security adds SessionSigner, which signs identity claims and never carries a secret, with a minimum 32-byte deployment key, expiry enforced on read rather than merely recorded, and a constant-time signature comparison so a check cannot become a forgery oracle; requireOrganization refuses any action on an organization the session does not belong to. apps/api adds GitHub sign-in start and callback behind an injected IdentityProvider, so the exchange is testable without credentials. Callback safety is proven: a state is issued into an HttpOnly SameSite=Lax cookie and must be echoed back, so a callback with no cookie, no state parameter, or a mismatched state is refused, and a rejected identity exchange sets no session at all. 6 unit tests cover forged claims, a truncated signature, a session from another deployment key, an expired session, an absent session, and cross-tenant access to every credential endpoint. Results: pnpm check 199 unit tests across 33 files; pnpm build passed; 56 integration tests passed.",
+          "nextAction": "No production IdentityProvider exists: the GitHub OAuth exchange is an injected port with no binding, which needs App credentials. Organization membership is taken from the exchange result and is not reconciled against GitHub afterwards, so a user removed from an organization keeps access until their session expires; a membership check on each request or a shorter session is required before release. apps/dashboard remains a scaffold with no sign-in UI, and the Playwright coverage the task expects does not exist.",
+          "updatedAt": "2026-09-18T19:48:50.307930+00:00"
+        },
+        {
+          "id": "P1-S16-T02",
+          "title": "Manage repositories and organization policy",
+          "upstream": [
+            "P1-S10-002"
+          ],
+          "modules": [
+            "apps/api",
+            "apps/dashboard"
+          ],
+          "acceptance": "Fresh all-enabled-repository admin checks serialized with enablement",
+          "status": "in_progress",
+          "evidence": "Repository enablement and organization policy administration implemented, exposed and consumed. The store performs the administrator check INSIDE the write, holding the target rows FOR UPDATE and only then asking which the caller may administer, so the answer cannot go stale and a revocation that lands first wins; six PostgreSQL tests prove selective enablement, the check seeing exactly the locked rows, a revoked caller enabling nothing, concurrent requests never overlapping inside the check, and a foreign repository never being offered. Organization policy has its own versioned, tenant-isolated table (migration 0005) kept apart from repository_configs so repository content cannot reach administrator-only fields (ADR-027). HTTP endpoints expose listing, enablement, and reading or replacing policy behind session authorization, with a test proving every route refuses another organization with 403 while the store is never called, refuses an unsigned caller with 401, and rejects a malformed identifier with 400. The loop is now closed: the event handler reads the stored policy rather than taking an injected function, and A REVIEW IS SKIPPED RATHER THAN DEFAULTED when no policy is set, because running on a provider, retention mode or execution mode nobody chose would be worse than not running; a stored policy that no longer satisfies its schema is treated as absent rather than patched. An integration test proves the stored policy governs the resulting snapshot and that both absent and invalid policies skip. Results: pnpm check 200 unit tests across 33 files; pnpm build passed; 63 integration tests passed from a clean disposable database with migrations 0000-0005 applying from scratch.",
+          "nextAction": "AdminCheck has no production implementation, so nothing resolves real GitHub repository administrators; that needs App credentials. Dashboard pages remain a scaffold, so administration is reachable by HTTP but has no interface, and the Playwright coverage S16-T04 expects does not exist.",
+          "updatedAt": "2026-09-18T20:44:03.247086+00:00"
+        },
+        {
+          "id": "P1-S16-T03",
+          "title": "Manage encrypted provider credentials",
+          "upstream": [
+            "P1-S6-008"
+          ],
+          "modules": [
+            "apps/api"
+          ],
+          "acceptance": "Write-only save/test/rotate/revoke; secrets never returned",
+          "status": "in_progress",
+          "evidence": "Encrypted provider credential administration implemented as write-only ingress. POST /api/credentials accepts a secret, stores it through an injected CredentialAdmin port and returns only an identifier and provider name; a test saves sk-SENTINEL-VALUE and asserts the response body does not contain it, and that the listing endpoint returns metadata only, so a saved secret is never readable through any endpoint (ADR-035). Listing, saving and revoking each require a session that belongs to the organization named in the request, and a cross-tenant attempt returns 403 with the underlying store never called. Revocation is proven to reach the store with the correct tenant and identifier. The encrypted store behind the port already exists and is separately proven against PostgreSQL to hold ciphertext only, to separate tenants, and to refuse a revoked credential. Results: pnpm check 199 unit tests across 33 files.",
+          "nextAction": "Rotation and the connection test are not exposed: the task names save, test, rotate and revoke, and only save, list and revoke exist. Test Connection needs the capability probe wired to a stored credential, and rotation needs a second credential activated before the first is revoked so a review in flight does not lose its provider. No production binding of CredentialAdmin to EncryptedSecretStore exists yet in a running API process.",
+          "updatedAt": "2026-09-18T19:48:50.339069+00:00"
+        },
+        {
+          "id": "P1-S16-T04",
+          "title": "Configure model roles and fallback",
+          "upstream": [
+            "P1-S10-003"
+          ],
+          "modules": [
+            "apps/dashboard"
+          ],
+          "acceptance": "Playwright proves incompatible profiles cannot silently activate",
+          "status": "planned"
+        },
+        {
+          "id": "P1-S16-T05",
+          "title": "Manage runner enrollment and status",
+          "upstream": [
+            "P1-S10-004"
+          ],
+          "modules": [
+            "apps/dashboard"
+          ],
+          "acceptance": "Online/offline/revoke/upgrade flows work without DB access",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "P1-S17",
+      "title": "Learnings feedback history and retention",
+      "requirements": [
+        "FR-22",
+        "FR-23",
+        "FR-24"
+      ],
+      "tasks": [
+        {
+          "id": "P1-S17-T01",
+          "title": "Manage scoped explicit learnings",
+          "upstream": [
+            "P1-S10-007"
+          ],
+          "modules": [
+            "apps/api",
+            "apps/dashboard"
+          ],
+          "acceptance": "CRUD and precedence/auth tests pass",
+          "status": "in_progress",
+          "evidence": "Scoped explicit learnings implemented in packages/db/src/knowledge.ts with migration 0006_medical_sally_floyd.sql. A learning carries path globs, a rule, an enabled flag and the administrator who wrote it, scoped by tenant and repository. forPath returns only enabled learnings whose globs match the file, which is what the configuration precedence chain needs. A disabled learning is kept rather than deleted so an administrator can still see what was once decided. Empty scopes and blank rules are refused. Tenant isolation is proven directly: listing through another organization returns nothing, and enabling or removing through another organization changes nothing and reports failure rather than succeeding silently. 3 PostgreSQL tests cover scoping, the enable and remove lifecycle, and cross-tenant refusal. Results: pnpm check 200 unit tests across 33 files; pnpm build passed; 70 integration tests passed from a clean disposable database with migrations 0000-0006 applying from scratch.",
+          "nextAction": "Not yet consumed: the review pipeline does not read learnings, so the precedence chain still resolves without them and a scoped rule has no effect on a review. HTTP endpoints and dashboard management do not exist, so learnings can only be created through the store.",
+          "updatedAt": "2026-09-18T20:47:23.697878+00:00"
+        },
+        {
+          "id": "P1-S17-T02",
+          "title": "Record explicit and inferred feedback",
+          "upstream": [],
+          "modules": [
+            "apps/api",
+            "db"
+          ],
+          "acceptance": "Provenance visible; dismissals never create permanent rules",
+          "status": "in_progress",
+          "evidence": "Feedback recording implemented with provenance preserved. Each record carries the finding fingerprint, one of the seven documented outcomes, whether it came from a person or was inferred, and the actor where there is one; the outcome and source sets are enforced by database constraints rather than convention, and repeated identical feedback is idempotent rather than multiplying. A test asserts that inferred feedback is marked as such with a null actor, so nobody mistakes a system observation for a person judgement. THE CENTRAL PROPERTY IS PROVEN: recording a dismissal creates no learning, so a single dismissal never becomes a permanent rule (spec 25.2); promoting feedback into a rule remains a deliberate administrator action through LearningStore. Results: pnpm check 200 unit tests across 33 files; 70 integration tests passed.",
+          "nextAction": "No caller records feedback yet: nothing observes an accepted suggestion, a dismissed comment or a finding resolved by a later commit, so the table is correct but empty in practice. Feedback does not influence ranking, which the specification permits to remain future work but which is the point of collecting it.",
+          "updatedAt": "2026-09-18T20:47:23.753299+00:00"
+        },
+        {
+          "id": "P1-S17-T03",
+          "title": "Display redacted review history",
+          "upstream": [
+            "P1-S10-008"
+          ],
+          "modules": [
+            "apps/dashboard"
+          ],
+          "acceptance": "Failures diagnosable; ephemeral mode stores only metadata",
+          "status": "planned"
+        },
+        {
+          "id": "P1-S17-T04",
+          "title": "Implement retention transitions and purge",
+          "upstream": [
+            "P1-S10-009"
+          ],
+          "modules": [
+            "db",
+            "apps/api"
+          ],
+          "acceptance": "Old jobs cannot recreate purged data; backups disclose expiry",
+          "status": "in_progress",
+          "evidence": "Retention transitions and purge implemented, with the acceptance property proven: a job queued before a purge cannot recreate the data the purge removed. RetentionStore.setMode changes the repository retention mode FIRST and within the same transaction as the purge, so any later write is refused by the column constraints that enforce ephemeral storage rather than relying on the caller to notice. Downgrading to ephemeral nulls finding explanations and replacements, nulls evidence quotes, deletes any held publication payload and marks the runs ephemeral; a test writes content-bearing rows while indexed, downgrades, and asserts no sentinel string survives anywhere. A separate test then attempts the write a stale job would perform and asserts the database refuses it and no content appears. purgeOlderThan removes runs past the retention window together with everything hanging off them, verified across review runs, findings and feedback. 3 PostgreSQL tests. Results: pnpm check 200 unit tests across 33 files; pnpm build passed; 70 integration tests passed.",
+          "nextAction": "No schedule drives the purge: purgeOlderThan exists but nothing calls it periodically, and the retention window is a caller argument rather than configured policy. The specification also requires that backups disclose expiry, which is untouched: nothing records or communicates when purged data leaves backups, and that belongs with the backup runbook in P1-S20-T02.",
+          "updatedAt": "2026-09-18T20:47:23.794230+00:00"
+        }
+      ]
+    },
+    {
+      "id": "P1-S18",
+      "title": "Optional embeddings and vector retrieval",
+      "requirements": [
+        "FR-25"
+      ],
+      "tasks": [
+        {
+          "id": "P1-S18-T01",
+          "title": "Implement optional embedding adapters",
+          "upstream": [
+            "P1-S7-008"
+          ],
+          "modules": [
+            "providers"
+          ],
+          "acceptance": "Dimensions/counts/errors and local privacy validated",
+          "status": "planned"
+        },
+        {
+          "id": "P1-S18-T02",
+          "title": "Version embedding spaces and optional pgvector",
+          "upstream": [
+            "P1-S5-008"
+          ],
+          "modules": [
+            "db",
+            "retrieval"
+          ],
+          "acceptance": "No incompatible-space comparison; unavailable vector degrades lexically",
+          "status": "planned"
+        },
+        {
+          "id": "P1-S18-T03",
+          "title": "Evaluate vectors and vector-off behavior",
+          "upstream": [],
+          "modules": [
+            "evals/review"
+          ],
+          "acceptance": "Full product works without vector extension; usefulness/cost report",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "P1-S19",
+      "title": "Security observability and final evaluation",
+      "requirements": [
+        "SEC-01",
+        "SEC-02",
+        "SEC-03",
+        "SEC-04",
+        "SEC-05",
+        "SEC-06",
+        "SEC-07",
+        "NFR-03",
+        "NFR-04",
+        "NFR-05",
+        "NFR-06"
+      ],
+      "tasks": [
+        {
+          "id": "P1-S19-T01",
+          "title": "Complete telemetry and alerts",
+          "upstream": [
+            "P1-S11-001",
+            "P1-S11-002"
+          ],
+          "modules": [
+            "telemetry"
+          ],
+          "acceptance": "End-to-end traces and leakage tests cover all boundaries",
+          "status": "in_progress",
+          "evidence": "Telemetry completed as far as it can be without live services. The operational measurements the specification lists are now a typed union recorded through one surface, so a stage cannot invent its own label and a dashboard does not depend on spelling: webhook ingest, queue wait, checkout, extraction, context retrieval, model call, publication, retries and failures, stale reviews, runner state, findings published and suppressed, suggestions offered and accepted, verifier suppression, duplicates merged, files classified and nodes extracted. INSTRUMENTATION CANNOT BECOME A LEAK, which is the property worth having: a measurement dimension is emitted output like any other, so it passes the same field allowlist and the same shape-based scrubbing as a log line. Tests prove a bearer token and a provider key in dimensions are redacted, an unexpected dimension name is dropped entirely, and that repository content passed as text, explanation, quote or replacement never reaches output in any form; even a file path is refused, because a path can identify private work. Earlier in this stage the same review found that redaction filtered by field name only and let a connection string through as event; that is fixed and covered. Results: pnpm check 217 unit tests across 36 files; pnpm build passed.",
+          "nextAction": "Not satisfied: the task requires end-to-end traces across all boundaries, and no stage yet calls measure or span in production paths, so the surface exists and is safe but nothing is actually instrumented; wiring it belongs with the stages it measures. No OpenTelemetry exporter is configured, so nothing is scraped or collected anywhere, and no alerting rules exist. A real trace across webhook, queue, runner and publication cannot be observed until the GitHub bindings exist.",
+          "updatedAt": "2026-09-18T22:33:17.968487+00:00"
+        },
+        {
+          "id": "P1-S19-T02",
+          "title": "Run adversarial security review",
+          "upstream": [
+            "P1-S11-009",
+            "P1-S11-010"
+          ],
+          "modules": [
+            "testing",
+            "docs/security"
+          ],
+          "acceptance": "No unresolved critical/high issues; injection/tenant/secret tests pass",
+          "status": "in_progress",
+          "evidence": "Adversarial review executed against the real components and recorded in docs/security/adversarial-review.md. An attack corpus in packages/testing covers eight prompt-injection shapes, fabricated evidence, unsafe patches, six parser-hostility inputs and credential-shaped secrets; evals/security/boundaries.test.ts runs it against real extraction, prompt construction, the review pipeline, the suggestion validator and telemetry rather than doubles. HELD: injection is fenced with an unguessable per-review marker that content cannot close, and independently a model that obeys an injection still publishes nothing because the gate refuses any quotation absent from the node, so neither layer is load-bearing alone; fabricated quotations, paths and traversals are refused; unsafe patches are refused or neutralised by encoding with the structural proof rejecting anything beyond the target text; cross-tenant access is refused before the store is reached, on every endpoint and store that takes an organization. TWO FINDINGS, BOTH FIXED. First, twenty thousand nodes in one well-under-size file took 10.9 seconds to extract, because a size cap does not imply a node cap; extraction now stops at LIMITS.nodesPerFile and reports NODE_LIMIT_REACHED so a partially reviewed file cannot look fully reviewed, and the corpus now completes in 1.2 seconds. Second, telemetry redaction filtered by field NAME only, so a connection string logged as event or a token as traceId was written verbatim; values are now scrubbed by shape wherever they appear, with ordinary operational values untouched. Results: pnpm check 208 unit tests across 35 files; pnpm build passed; 70 integration tests passed.",
+          "nextAction": "NOT SATISFIED: the task requires no unresolved critical or high issues after a review, and this is an agent review rather than an independent audit; a human security reviewer must repeat it before the criterion is met. Recorded residual limits: secret scrubbing works on shape and cannot catch an arbitrary short opaque secret, so callers must still not log secrets; no live GitHub or cloud provider was involved, so real token scope and real webhook delivery are untested; no dependency or image vulnerability scan, SBOM or signing exists (P1-S20); and there is no global rate limit on unauthenticated registration attempts or webhook volume.",
+          "updatedAt": "2026-09-18T21:57:39.573399+00:00"
+        },
+        {
+          "id": "P1-S19-T03",
+          "title": "Run resource and outage stress tests",
+          "upstream": [
+            "P1-S11-008"
+          ],
+          "modules": [
+            "testing"
+          ],
+          "acceptance": "Limits respected, coverage honest and service responsive",
+          "status": "in_progress",
+          "evidence": "Resource and outage stress implemented in evals/security/limits.test.ts, driving the real components past each documented limit. LIMITS ARE ENFORCED, NOT JUST DOCUMENTED: a file past LIMITS.fileBytes yields no nodes and a FILE_TOO_LARGE diagnostic; a file past LIMITS.nodesPerFile stops at the cap and reports NODE_LIMIT_REACHED; a single node longer than LIMITS.nodeChars is refused rather than truncated, because a truncated node would be reviewed as if it were the whole sentence; context stays within LIMITS.contextTokens with a crowded index and within a tighter caller budget, reporting truncation so nobody mistakes partial context for the repository. RESPONSIVENESS: indexing 5000 nodes and searching them completes well under five seconds. OUTAGE: a provider failing on one node records a failure and still reviews the rest, with reviewed counting both. COVERAGE IS HONEST: a non-locale data file, an unsupported format and an oversized file each produce zero nodes AND a named diagnostic, so a skip is never silent; this is the failure mode the project has rediscovered repeatedly and the test asserts against it directly. Results: pnpm check 215 unit tests across 36 files; pnpm build passed; 70 integration tests passed.",
+          "nextAction": "Not covered: no test drives a full repository through acquisition, extraction and review at scale, because that needs a large real repository and GitHub credentials; parser wall-clock timeouts (LIMITS.parserMs) and memory bounds are defined but not enforced by an isolated worker, so a pathological parser can still block its job; there is no load test of the API or queue under concurrent webhook volume, and no global rate limit on unauthenticated endpoints.",
+          "updatedAt": "2026-09-18T22:31:56.425088+00:00"
+        },
+        {
+          "id": "P1-S19-T04",
+          "title": "Run frozen release evaluation gates",
+          "upstream": [
+            "P1-S11-003",
+            "P1-S11-004",
+            "P1-S11-005"
+          ],
+          "modules": [
+            "evals"
+          ],
+          "acceptance": "Held-out and live provider reports identify exact versions",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "P1-S20",
+      "title": "Deployment recovery and release acceptance",
+      "requirements": [
+        "NFR-07"
+      ],
+      "tasks": [
+        {
+          "id": "P1-S20-T01",
+          "title": "Prove backup restore and migration recovery",
+          "upstream": [
+            "P1-S11-011"
+          ],
+          "modules": [
+            "docs/runbooks",
+            "db"
+          ],
+          "acceptance": "Clean restore and reconciliation avoid duplicate external effects",
+          "status": "planned"
+        },
+        {
+          "id": "P1-S20-T02",
+          "title": "Exercise operational runbooks",
+          "upstream": [
+            "P1-S11-012"
+          ],
+          "modules": [
+            "docs/runbooks"
+          ],
+          "acceptance": "Second operator completes failure drills without undocumented steps",
+          "status": "planned"
+        },
+        {
+          "id": "P1-S20-T03",
+          "title": "Package cloud reference deployment",
+          "upstream": [],
+          "modules": [
+            "docker/cloud",
+            "compose.yaml"
+          ],
+          "acceptance": "Fresh deployment and rollback work without Redis/Kubernetes",
+          "status": "planned"
+        },
+        {
+          "id": "P1-S20-T04",
+          "title": "Audit Phase 1 Definition of Done",
+          "upstream": [],
+          "modules": [
+            "docs/implementation"
+          ],
+          "acceptance": "Every mandatory requirement has evidence; no Phase 1 deferral",
+          "status": "planned"
+        }
+      ]
+    }
+  ]
+}
