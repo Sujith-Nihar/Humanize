@@ -24,16 +24,19 @@ const diff:DiffMap={repositoryId:'r',baseSha:'a'.repeat(40),headSha,mergeBaseSha
   files:[{oldPath:'Hero.tsx',newPath:'Hero.tsx',addedLines:[2],deletedLines:[],hunks:[{oldStart:1,oldCount:3,newStart:1,newCount:3}]}]};
 
 it('attaches a one-click fix it has proven against the file itself',async()=>{
-  const findings=[finding('Scientifically Engineered Sound')];
+  // A rewrite of comparable length that recasts the style and keeps the substance.
+  const rewrite='Sound engineered from research on focus and rest';
+  const findings=[finding(rewrite)];
   const outcome=await attachSuggestions(findings,diff,headSha,async()=>SOURCE);
   expect(outcome.attached).toBe(1);
-  expect(findings[0]!.suggestion?.replacement).toContain('Scientifically Engineered Sound</h1>');
-  expect(findings[0]!.suggestion?.replacement).not.toContain('Designed for the Mind');
+  // The patch is a whole line of the real file, with the surrounding markup intact.
+  expect(findings[0]!.suggestion?.replacement).toContain(`<h1>${rewrite}</h1>`);
 });
 
 it('refuses a patch that would change what the file does',async()=>{
   // Valid syntax is not proof of a safe patch: this opens a JSX expression from prose.
-  const findings=[finding('{dangerouslyRun()}')];
+  // Padded to full length so the information-loss gate is not what refuses it.
+  const findings=[finding('{dangerouslyRun()} engineered from research on focus and rest')];
   const outcome=await attachSuggestions(findings,diff,headSha,async()=>SOURCE);
   expect(outcome.attached).toBe(0);
   expect(findings[0]!.suggestion).toBeUndefined();
@@ -41,7 +44,7 @@ it('refuses a patch that would change what the file does',async()=>{
 });
 
 it('refuses when the file cannot be read, rather than guessing at it',async()=>{
-  const findings=[finding('Scientifically Engineered Sound')];
+  const findings=[finding('Sound engineered from research on focus and rest')];
   const outcome=await attachSuggestions(findings,diff,headSha,async()=>null);
   expect(outcome).toEqual({attached:0,refused:{SOURCE_UNAVAILABLE:1}});
 });
