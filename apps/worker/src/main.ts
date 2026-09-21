@@ -1,9 +1,10 @@
 import { AdministrationStore,Database,PublicationStore,RunStore,RunnerStore,migrate } from '@humanize/db';
 import { JobQueue } from '@humanize/queue';
 import { GitHubEventSchema } from '@humanize/domain';
+import { LIMITS } from '@humanize/domain';
 import type { ReviewSnapshot } from '@humanize/domain';
 import { GitHubFileSource,GitHubTokenBroker,ReviewPublisher,StaleHeadError,buildCheck,buildReview,fetchDiffMap,githubClient } from '@humanize/github';
-import { findingsFromResult,planPublication } from '@humanize/review';
+import { attachSuggestions,findingsFromResult,planPublication } from '@humanize/review';
 import { handleGitHubEvent } from './handlers.js';
 import { publishReview } from './publish-worker.js';
 import { dispatchReview } from './review-worker.js';
@@ -89,6 +90,13 @@ await queue.work('review.publish',async payload=>{
       // Findings are rebuilt from the accepted result and every quotation re-checked, because
       // the runner is untrusted even after its envelope was validated.
       const findings=findingsFromResult(result,snapshot);
+      // A one-click fix is a patch the author applies to their own repository, so the control
+      // plane proves it against the file itself rather than trusting anything the runner sent.
+      const suggested=config
+        ? await attachSuggestions(findings,diff,snapshot.headSha,async filePath=>
+            (await config.read({installationId:snapshot.installationId,githubRepositoryId:Number(githubRepositoryId),
+              owner:snapshot.owner,name:snapshot.repository,ref:snapshot.headSha,path:filePath},LIMITS.fileBytes))?.content??null)
+        : {attached:0,refused:{}};
       const plan=planPublication(findings);
       const review=buildReview({inline:plan.inline,summary:plan.summary,diff,reviewedNodes:result.nodes.length});
       const check=buildCheck([...plan.inline,...plan.summary]);
@@ -98,6 +106,7 @@ await queue.work('review.publish',async payload=>{
           review,check);
         console.log(JSON.stringify({event:'review.published',runId:payload.runId,
           inline:review.comments.length,summary:plan.summary.length,conclusion:check.conclusion,
+          suggestions:suggested.attached,suggestionsRefused:suggested.refused,
           reviewId:posted.reviewId,checkRunId:posted.checkRunId,updatedExisting:posted.updatedExisting}));
         return {reviewId:posted.reviewId};
       }catch(error){

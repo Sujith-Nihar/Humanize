@@ -105,3 +105,24 @@ it('flags padded phrasing, which is distinct from promotional vocabulary', () =>
   expect(ids(make('The dashboard lets you view all applications.'))).toEqual([]);
   expect(ids(make('Run the migration before starting the worker.'))).toEqual([]);
 });
+
+it('offers a deletion only where removing the construction is unambiguous',()=>{
+  const tagline=evaluateRules(make('Scientifically Engineered Sound — Designed for the Mind'),{})
+    .find(s=>s.ruleId==='construction:tagline-appositive');
+  expect(tagline?.replacement).toBe('Scientifically Engineered Sound');
+
+  const strawman=evaluateRules(make('Each soundscape is intentionally designed — not randomly generated — to support focus.'),{})
+    .find(s=>s.ruleId==='construction:strawman-contrast');
+  expect(strawman?.replacement).toBe('Each soundscape is intentionally designed to support focus.');
+
+  // Rewriting prose is the model's job. A construction with no safe deletion offers nothing
+  // rather than guessing, and the finding stays comment-only.
+  const reframe=evaluateRules(make("It's Not Just Music — It's Science You Can Feel"),{})
+    .find(s=>s.ruleId==='construction:negation-reframe');
+  expect(reframe).toBeDefined();
+  expect(reframe?.replacement).toBeUndefined();
+
+  const opener=evaluateRules(make('In a world of endless playlists, we take a different approach.'),{})
+    .find(s=>s.ruleId==='construction:scene-setting-opener');
+  expect(opener?.replacement).toBeUndefined();
+});

@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@humanize/domain": "workspace:*",
-    "@humanize/shared": "workspace:*"
+    "@humanize/shared": "workspace:*",
+    "@humanize/suggestions": "workspace:*"
   }
 }

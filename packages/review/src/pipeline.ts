@@ -43,7 +43,7 @@ export function authorFacing(correction:string,system:string):boolean {
 const placeholdersOf=(value:string):string[]=>[...value.matchAll(/\{\{[^{}]+\}\}|\$\{[^{}]+\}|\{[^{}]+\}|%(?:\d+\$)?[-+#0 ]*\d*(?:\.\d+)?[a-zA-Z]|%%/g)].map(match=>match[0]).sort();
 
 export interface SuppressedCandidate { nodeId:string; category:string; reason:SuppressionReason; }
-export interface NodeSignal { ruleId:string; description:string; category:CategoryName; severity:'major'|'minor'|'nit'; start:number; end:number; matchedText:string; blocking:boolean; standalone?:boolean; evidence:EvidenceRecord; }
+export interface NodeSignal { ruleId:string; description:string; category:CategoryName; severity:'major'|'minor'|'nit'; start:number; end:number; matchedText:string; blocking:boolean; standalone?:boolean; replacement?:string; evidence:EvidenceRecord; }
 
 export interface ReviewPorts {
   reviewer:ModelProvider; reviewerModel:string;
@@ -113,7 +113,10 @@ export async function reviewNodes(snapshot:ReviewSnapshot,nodes:readonly Content
       findings.push({
         nodeId:node.id,category:signal.category,severity:signal.severity,confidence:1,
         exactText:signal.matchedText,explanation:signal.description,
-        evidence:[{id:signal.evidence.id,quote:signal.matchedText}],replacement:null,requiresVerification:false,
+        evidence:[{id:signal.evidence.id,quote:signal.matchedText}],
+        // A rule offers a replacement only where deleting the construction is unambiguous;
+        // the control plane still proves it is a safe patch before publishing it.
+        replacement:signal.replacement??null,requiresVerification:false,
         fingerprint:fingerprint(['finding',node.stableKey,signal.ruleId,signal.matchedText]),
         node,evidenceRecords:[signal.evidence],deterministic:true,blocking:signal.blocking,verificationConfidence:1,
       });

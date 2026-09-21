@@ -28,7 +28,7 @@ export interface TrustedFileRequest {
 export class GitHubFileSource {
   constructor(private readonly broker: GitHubTokenBroker) {}
 
-  async read(request: TrustedFileRequest): Promise<{ content: string; sha: string } | null> {
+  async read(request: TrustedFileRequest, maxBytes: number = MAX_TRUSTED_FILE_BYTES): Promise<{ content: string; sha: string } | null> {
     const token = await this.broker.token(request.installationId, request.githubRepositoryId, 'read');
     try {
       const { data } = await githubClient(token).request('GET /repos/{owner}/{repo}/contents/{path}', {
@@ -36,7 +36,7 @@ export class GitHubFileSource {
       });
       // A directory, a symlink or a submodule at this path is not a configuration file.
       if (Array.isArray(data) || data.type !== 'file') return null;
-      if (data.size > MAX_TRUSTED_FILE_BYTES) return null;
+      if (data.size > maxBytes) return null;
       // Content is absent above GitHub's own inline limit; the size guard above precedes it.
       if (typeof data.content !== 'string' || data.encoding !== 'base64') return null;
       return { content: Buffer.from(data.content, 'base64').toString('utf8'), sha: data.sha };

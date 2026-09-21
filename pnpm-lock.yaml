@@ -381,6 +381,9 @@ importers:
       '@humanize/shared':
         specifier: workspace:*
         version: link:../shared
+      '@humanize/suggestions':
+        specifier: workspace:*
+        version: link:../suggestions
 
   packages/rules:
     dependencies:

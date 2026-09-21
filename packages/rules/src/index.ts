@@ -13,6 +13,12 @@ export interface RuleSignal {
   blocking:boolean;
   /** Objectively countable, so it may be reported without model agreement (ADR-037). */
   standalone?:boolean;
+  /**
+   * The node text with the construction removed, where removal is unambiguous. Only offered
+   * for constructions whose fix is a deletion; rewriting prose is the model's job, not a
+   * regular expression's.
+   */
+  replacement?:string;
   evidence:EvidenceRecord;
 }
 
@@ -52,22 +58,42 @@ const PADDING=[
  * of good writing, so these match the whole construction and never the punctuation alone — a
  * rule that fired on every em dash would be worse than no rule at all.
  */
-const CONSTRUCTIONS:readonly (readonly [string,RegExp,string])[]=[
+interface Construction {
+  ruleId:string;
+  pattern:RegExp;
+  description:string;
+  /** Returns the node text with the construction removed, or undefined when no safe deletion exists. */
+  rewrite?:(text:string)=>string|undefined;
+}
+const TAGLINE=/^(.*\S)\s*[—–]\s*(?:designed|built|engineered|crafted|tuned|made|optimi[sz]ed|powered|purpose-built)\s+(?:for|by|to)\b.*$/iu;
+const STRAWMAN_ASIDE=/\s*[—–]\s*not\s+(?:\w+ly\s+)?\w+(?:ed|ing)\b\s*[—–]\s*/giu;
+const CONSTRUCTIONS:readonly Construction[]=[
   // "It's not just music — it's science": asserts significance instead of stating any.
-  ['construction:negation-reframe',/\bnot\s+(?:just|merely|simply|only)\b[^.!?]{0,80}?[—–]\s*(?:it'?s|its|they'?re|we'?re|you'?re|that'?s)\b/giu,
-   'Defines the subject by what it is not, rather than stating what it is'],
-  // "— not randomly generated —": contrast against a strawman nobody proposed.
-  [ 'construction:strawman-contrast',/[—–]\s*not\s+(?:\w+ly\s+)?\w+(?:ed|ing)\b/giu,
-   'Contrast drawn against an alternative nobody proposed'],
+  {ruleId:'construction:negation-reframe',
+   pattern:/\bnot\s+(?:just|merely|simply|only)\b[^.!?]{0,80}?[—–]\s*(?:it'?s|its|they'?re|we'?re|you'?re|that'?s)\b/giu,
+   description:'Defines the subject by what it is not, rather than stating what it is'},
+  // "— not randomly generated —": contrast against a strawman nobody proposed. Where the
+  // strawman sits between two dashes it is a clean aside, so deleting it is unambiguous.
+  {ruleId:'construction:strawman-contrast',
+   pattern:/[—–]\s*not\s+(?:\w+ly\s+)?\w+(?:ed|ing)\b/giu,
+   description:'Contrast drawn against an alternative nobody proposed',
+   rewrite:text=>{
+     const removed=text.replace(STRAWMAN_ASIDE,' ').replace(/\s{2,}/gu,' ').trim();
+     return removed!==text&&removed.length>0?removed:undefined;
+   }},
   // "no guesswork, just sound engineered for…": the contrast carries the emphasis.
-  ['construction:no-x-just-y',/\bno\s+\w+,\s*just\s+\w+/giu,
-   'No-X-just-Y construction, where the contrast substitutes for the claim'],
+  {ruleId:'construction:no-x-just-y',
+   pattern:/\bno\s+\w+,\s*just\s+\w+/giu,
+   description:'No-X-just-Y construction, where the contrast substitutes for the claim'},
   // Scene-setting openers that say nothing about the subject.
-  ['construction:scene-setting-opener',/^[\s"'“]*(?:in a world (?:of|where)\b|imagine a world\b|gone are the days\b|say goodbye to\b)/giu,
-   'Scene-setting opener that carries no information about the subject'],
-  // "Sound — Designed for the Mind": a tagline restating the heading in other words.
-  ['construction:tagline-appositive',/[—–]\s*(?:designed|built|engineered|crafted|tuned|made|optimi[sz]ed|powered|purpose-built)\s+(?:for|by|to)\b/giu,
-   'Em-dash tagline restating the heading rather than adding to it'],
+  {ruleId:'construction:scene-setting-opener',
+   pattern:/^[\s"'“]*(?:in a world (?:of|where)\b|imagine a world\b|gone are the days\b|say goodbye to\b)/giu,
+   description:'Scene-setting opener that carries no information about the subject'},
+  // "Sound — Designed for the Mind": a tagline restating the heading, so dropping it is safe.
+  {ruleId:'construction:tagline-appositive',
+   pattern:/[—–]\s*(?:designed|built|engineered|crafted|tuned|made|optimi[sz]ed|powered|purpose-built)\s+(?:for|by|to)\b/giu,
+   description:'Em-dash tagline restating the heading rather than adding to it',
+   rewrite:text=>TAGLINE.exec(text)?.[1]?.trim()||undefined},
 ];
 
 const SUPERLATIVES=/\b(?:most|best|greatest|ultimate|perfect|flawless|effortless|incredible|amazing|revolutionary|unparalleled|unmatched)\b/giu;
@@ -138,11 +164,13 @@ export function evaluateRules(node:ContentNode,config:RuleConfiguration={}):Rule
   // phrase lists above cannot see these, because the words themselves are ordinary and often
   // product-specific; what is formulaic is the shape. Each pattern is deliberately narrow,
   // since em dashes and contrast are also the tools of good writing.
-  for(const [ruleId,pattern,description] of CONSTRUCTIONS){
-    for(const match of text.matchAll(pattern)){
+  for(const construction of CONSTRUCTIONS){
+    for(const match of text.matchAll(construction.pattern)){
       const start=match.index??0;
-      signals.push(signal(node,{ruleId,category:'ai_like_generic',severity:'minor',start,end:start+match[0].length,
-        description,blocking:false,standalone:true}));
+      const rewritten=construction.rewrite?.(text);
+      signals.push(signal(node,{ruleId:construction.ruleId,category:'ai_like_generic',severity:'minor',
+        start,end:start+match[0].length,description:construction.description,blocking:false,standalone:true,
+        ...(rewritten!==undefined&&rewritten!==text?{replacement:rewritten}:{})}));
     }
   }
 

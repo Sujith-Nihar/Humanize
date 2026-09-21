@@ -6,3 +6,5 @@ export type { NodeFailure,NodeSignal,ReviewOptions,ReviewOutcome,ReviewPorts,Sup
 export { planPublication,scoreFinding } from './ranking.js';
 export type { PublicationPlan,RankedFinding,RankingOptions } from './ranking.js';
 export { findingsFromResult } from './results.js';
+export { attachSuggestions } from './suggest.js';
+export type { SourceReader,SuggestionOutcome } from './suggest.js';
