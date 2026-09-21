@@ -37,3 +37,5 @@ Upstream ADR-001 through ADR-020 remain authoritative in [specification §3](../
 - [ADR-037: Standalone deterministic findings](ADR-037.md) — accepted, affects P1-S08/P1-S13
 
 - [ADR-038: Transient publication payloads](ADR-038.md) — accepted, enables asynchronous publication
+
+- [ADR-039: Formulaic constructions as standalone findings](ADR-039.md) — accepted, extends ADR-037

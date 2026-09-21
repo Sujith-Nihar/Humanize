@@ -230,4 +230,78 @@ export const REVIEW_GOLD: ReviewCase[] = [
     ambiguous: true,
     note: 'Jargon that is correct and expected by this audience.',
   },
+  // --- Structural AI-style constructions, taken verbatim from a real pull request ---
+  // These are the shape the phrase-list rules were blind to: the vocabulary is ordinary and
+  // specific, but the sentence architecture is formulaic. Real material beats invented
+  // material, so these are the copy an actual reviewer failed to flag.
+  {
+    id: 'negation-reframe-hero',
+    kind: 'heading',
+    text: "It's Not Just Music — It's Science You Can Feel",
+    comment: true,
+    note: 'Not-just-X-it-is-Y reframing: a formula that asserts significance without stating any.',
+  },
+  {
+    id: 'negation-reframe-inline',
+    kind: 'marketing',
+    text: 'Each soundscape is intentionally designed — not randomly generated — to support a specific mental state.',
+    comment: true,
+    note: 'Defines the product by what it is not, against a strawman nobody proposed.',
+  },
+  {
+    id: 'negation-reframe-nojust',
+    kind: 'marketing',
+    text: 'Your journey begins here — no guesswork, just sound engineered for how the brain actually works.',
+    comment: true,
+    note: 'No-X-just-Y construction; the contrast carries the emphasis instead of the content.',
+  },
+  {
+    id: 'formulaic-opener-world',
+    kind: 'marketing',
+    text: 'In a world of endless playlists and algorithm-driven noise, NeuroRhythms takes a different approach.',
+    comment: true,
+    note: 'In-a-world-of opener: scene-setting that says nothing about the product.',
+  },
+  {
+    id: 'tagline-appositive',
+    kind: 'heading',
+    text: 'Scientifically Engineered Sound — Designed for the Mind',
+    comment: true,
+    note: 'Em-dash appositive tagline restating the heading in different words.',
+  },
+  // --- Legitimate uses of the same punctuation and contrast, which must NOT be flagged ---
+  // A rule that fires on these is worse than no rule: em dashes and contrast are ordinary
+  // tools of good writing, and nagging about them would get the product uninstalled.
+  {
+    id: 'legitimate-em-dash-aside',
+    kind: 'documentation',
+    text: 'The runner connects outbound only — it never accepts inbound connections — so it can sit behind a firewall.',
+    comment: false,
+    legitimate: true,
+    note: 'Em dashes setting off a genuine technical aside that carries real information.',
+  },
+  {
+    id: 'legitimate-contrast-specific',
+    kind: 'documentation',
+    text: 'Read configuration from the base commit, not the head commit, so a pull request cannot weaken its own review.',
+    comment: false,
+    legitimate: true,
+    note: 'A real contrast between two concrete options, with the reason stated.',
+  },
+  {
+    id: 'legitimate-em-dash-heading',
+    kind: 'heading',
+    text: 'Installation — Docker and Compose',
+    comment: false,
+    legitimate: true,
+    note: 'Em dash as a plain separator in a structural heading, not a tagline.',
+  },
+  {
+    id: 'legitimate-not-only',
+    kind: 'documentation',
+    text: 'The check run reports a neutral conclusion, not a failure, because the findings are advisory.',
+    comment: false,
+    legitimate: true,
+    note: 'States what something is not in order to correct a likely wrong assumption.',
+  },
 ];

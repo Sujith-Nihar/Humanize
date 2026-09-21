@@ -40,6 +40,36 @@ const PADDING=[
   'at the end of the day','when it comes to','the fact that','in the event that',
   'a wide variety of','a wide range of','due to the fact that','for all intents and purposes',
 ];
+/**
+ * Formulaic sentence constructions, as distinct from formulaic vocabulary.
+ *
+ * Writing can be built entirely from specific, product-accurate words and still read as
+ * machine-made, because the architecture is a template: define the thing by what it is not,
+ * set a scene nobody asked for, or restate the heading after a dash. A phrase list cannot
+ * reach any of that.
+ *
+ * Each pattern is narrow on purpose. An em dash, a contrast and a negation are ordinary tools
+ * of good writing, so these match the whole construction and never the punctuation alone — a
+ * rule that fired on every em dash would be worse than no rule at all.
+ */
+const CONSTRUCTIONS:readonly (readonly [string,RegExp,string])[]=[
+  // "It's not just music — it's science": asserts significance instead of stating any.
+  ['construction:negation-reframe',/\bnot\s+(?:just|merely|simply|only)\b[^.!?]{0,80}?[—–]\s*(?:it'?s|its|they'?re|we'?re|you'?re|that'?s)\b/giu,
+   'Defines the subject by what it is not, rather than stating what it is'],
+  // "— not randomly generated —": contrast against a strawman nobody proposed.
+  [ 'construction:strawman-contrast',/[—–]\s*not\s+(?:\w+ly\s+)?\w+(?:ed|ing)\b/giu,
+   'Contrast drawn against an alternative nobody proposed'],
+  // "no guesswork, just sound engineered for…": the contrast carries the emphasis.
+  ['construction:no-x-just-y',/\bno\s+\w+,\s*just\s+\w+/giu,
+   'No-X-just-Y construction, where the contrast substitutes for the claim'],
+  // Scene-setting openers that say nothing about the subject.
+  ['construction:scene-setting-opener',/^[\s"'“]*(?:in a world (?:of|where)\b|imagine a world\b|gone are the days\b|say goodbye to\b)/giu,
+   'Scene-setting opener that carries no information about the subject'],
+  // "Sound — Designed for the Mind": a tagline restating the heading in other words.
+  ['construction:tagline-appositive',/[—–]\s*(?:designed|built|engineered|crafted|tuned|made|optimi[sz]ed|powered|purpose-built)\s+(?:for|by|to)\b/giu,
+   'Em-dash tagline restating the heading rather than adding to it'],
+];
+
 const SUPERLATIVES=/\b(?:most|best|greatest|ultimate|perfect|flawless|effortless|incredible|amazing|revolutionary|unparalleled|unmatched)\b/giu;
 const ADVERBS=/\b\w+ly\b/giu;
 
@@ -101,6 +131,18 @@ export function evaluateRules(node:ContentNode,config:RuleConfiguration={}):Rule
       // Padding is words doing no work; it is countable, so it can stand alone.
       signals.push(signal(node,{ruleId:`padding:${phrase}`,category:'clarity',severity:'minor',start,end:start+match[0].length,
         description:`Padded phrasing: "${match[0]}"`,blocking:false,standalone:true}));
+    }
+  }
+
+  // Formulaic constructions: the architecture of a sentence rather than its vocabulary. The
+  // phrase lists above cannot see these, because the words themselves are ordinary and often
+  // product-specific; what is formulaic is the shape. Each pattern is deliberately narrow,
+  // since em dashes and contrast are also the tools of good writing.
+  for(const [ruleId,pattern,description] of CONSTRUCTIONS){
+    for(const match of text.matchAll(pattern)){
+      const start=match.index??0;
+      signals.push(signal(node,{ruleId,category:'ai_like_generic',severity:'minor',start,end:start+match[0].length,
+        description,blocking:false,standalone:true}));
     }
   }
 
