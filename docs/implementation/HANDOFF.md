@@ -471,6 +471,50 @@ classified error channel is needed that distinguishes causes without echoing raw
 - Live target is `Sujith-Nihar/neurorhythms-ai-sound-36293`, now private. Webhook relay is a smee
   channel; the forwarder must be running for deliveries to arrive locally.
 
+## Session of 2026-09-21: the product does what it says
+
+A live pull request rewritten "to read like typical AI writing" was reviewed and passed clean.
+Three defects and one gap came out of that single run, all now closed, and the result is a
+reviewer that flags the copy, explains it, and hands the author a fix.
+
+**Detection was blind to the shape of the writing.** Every rule family matched vocabulary or
+sentence statistics; the copy was templated in its architecture with ordinary, product-specific
+words. Five constructions now stand alone as findings under [ADR-039](../adr/ADR-039.md), measured
+by `evals/review/deterministic.test.ts` in the default lane: **7/15 to 12/15 positives, 0/20 false
+positives, precision unchanged at 100%**. Nine gold cases were added — the five constructions
+verbatim from that pull request, and four hard negatives using the same punctuation and contrast
+legitimately, because an em dash is also a tool of good writing.
+
+**The verifier published its own instructions.** `llama3.2` repeated the sentence "state the
+problem with their writing directly, in one or two sentences, addressed to them" into
+`correctedExplanation`, and it reached a real pull request, because corrections were checked only
+for placeholders and emptiness. A correction is now rejected when it narrates the verification or
+echoes the prompt, measured as an eight-word overlap **against the system prompt itself** rather
+than a blacklist, so the check survives a reworded prompt.
+
+**A stale summary contradicted the review.** A run that found nothing left a standalone "Nothing
+to flag" comment; the next run posted a review raising seven observations and left both on the
+same commit. A review now removes the standalone summary it supersedes, and only one carrying
+this product's own marker — a test asserts a human's comment is never touched.
+
+**One-click fixes never reached GitHub.** The runner computed suggestions, counted them into a
+diagnostic and discarded them; `RunnerResultSchema` had no field to carry them, so the publisher's
+suggestion branch was unreachable. The wire protocol was left alone: the control plane fetches the
+file at the reviewed commit and proves the patch itself, so nothing about a patch comes from the
+runner. Measured live: **3 of 5 inline comments carried an applicable suggestion**, one refused as
+`UNCHANGED`. A tagline fix rewrote the text inside a JSX span leaving the element and `className`
+untouched; a model rewrite preserved a trailing `{" "}` on the same line.
+
+### Still open
+
+- The **verifier suppresses most candidates** — 10 to 11 of roughly 16 per run on `llama3.2`.
+  Every published model finding survives that filter, so the ratio needs measuring against the
+  labelled corpus before concluding whether the verifier or the reviewer is at fault.
+- **No human has clicked Commit suggestion**, which is what P1-S11-T04 acceptance actually names.
+- Review latency is **10 to 13 minutes** for 12 changed nodes: a reviewer and a verifier call per
+  node, sequentially, against a local model.
+- `REVIEW_FAILED_TIMEOUT` appears on one or two nodes per run and is not yet explained.
+
 ## Verified results and unverified work
 
 Verified on 2026-09-17 in this session:
