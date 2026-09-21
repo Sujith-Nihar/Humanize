@@ -7,7 +7,9 @@ export interface GitHubTransport {
 }
 export class StaleHeadError extends Error { constructor(readonly current:string){super('STALE_HEAD');this.name='StaleHeadError';} }
 
-export interface PublishOutcome { reviewId:number|null; checkRunId:number; updatedExisting:boolean; }
+export interface PublishOutcome { reviewId:number|null; checkRunId:number; updatedExisting:boolean;
+  /** A standalone summary comment this review replaced, removed so the two cannot contradict. */
+  supersededCommentId?:number; }
 
 /**
  * Posts a review to GitHub. The head is re-read immediately before writing: a review computed
@@ -58,6 +60,16 @@ export class ReviewPublisher {
       owner:target.owner,repo:target.repo,pull_number:target.pullNumber,commit_id:target.headSha,
       event:review.event,body:review.body,comments:review.comments.map(comment=>({path:comment.path,line:comment.line,side:comment.side,body:comment.body})),
     });
-    return {reviewId:posted.id,checkRunId:checkRun.id,updatedExisting:false};
+
+    // An earlier run with no findings leaves a standalone summary comment. This review now
+    // carries the current summary, so that comment is stale: leaving it in place shows the
+    // reader "Nothing to flag" directly above a review raising findings on the same commit.
+    // Only a comment bearing this product's own marker is ever removed.
+    const superseded=await this.existingReview(target);
+    if(superseded!==null){
+      await this.transport.request('DELETE /repos/{owner}/{repo}/issues/comments/{comment_id}',
+        {owner:target.owner,repo:target.repo,comment_id:superseded});
+    }
+    return {reviewId:posted.id,checkRunId:checkRun.id,updatedExisting:false,...(superseded!==null?{supersededCommentId:superseded}:{})};
   }
 }

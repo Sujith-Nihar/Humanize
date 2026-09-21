@@ -57,3 +57,41 @@ it('reports a failing check only for the conclusion it was given', async () => {
   await new ReviewPublisher(transport).publish(target,review,{conclusion:'failure',title:'1 policy violation',summary:'Blocked'});
   expect(calls.find(call=>call.route==='POST /repos/{owner}/{repo}/check-runs')!.parameters).toMatchObject({conclusion:'failure'});
 });
+
+it('removes a stale no-findings comment when a review supersedes it',async()=>{
+  // A run that found nothing leaves a standalone "Nothing to flag" comment. A later run with
+  // findings posts a review; leaving the old comment shows a reader both at once, on the same
+  // commit. Observed on a live pull request.
+  const calls:{route:string;parameters:Record<string,unknown>}[]=[];
+  const transport={request:async(route:string,parameters:Record<string,unknown>)=>{
+    calls.push({route,parameters});
+    if(route.startsWith('GET /repos/{owner}/{repo}/pulls/{pull_number}'))return {data:{head:{sha:'c'.repeat(40)}}};
+    if(route.startsWith('GET /repos/{owner}/{repo}/issues/{issue_number}/comments'))
+      return {data:[{id:4242,body:`${REVIEW_MARKER}\nNothing to flag.`}]};
+    return {data:{id:7}};
+  }};
+  const outcome=await new ReviewPublisher(transport as never).publish(
+    {owner:'acme',repo:'site',pullNumber:1,headSha:'c'.repeat(40)},
+    {event:'COMMENT',body:'summary',comments:[{path:'a.tsx',line:3,side:'RIGHT',body:'finding'}]},
+    {conclusion:'neutral',title:'1 observation',summary:'advisory'});
+  expect(outcome.supersededCommentId).toBe(4242);
+  const deleted=calls.find(c=>c.route.startsWith('DELETE /repos/{owner}/{repo}/issues/comments'));
+  expect(deleted?.parameters.comment_id).toBe(4242);
+});
+
+it('leaves comments that are not its own alone',async()=>{
+  const calls:string[]=[];
+  const transport={request:async(route:string)=>{
+    calls.push(route);
+    if(route.startsWith('GET /repos/{owner}/{repo}/pulls/{pull_number}'))return {data:{head:{sha:'c'.repeat(40)}}};
+    if(route.startsWith('GET /repos/{owner}/{repo}/issues/{issue_number}/comments'))
+      return {data:[{id:99,body:'a human wrote this'}]};
+    return {data:{id:7}};
+  }};
+  const outcome=await new ReviewPublisher(transport as never).publish(
+    {owner:'acme',repo:'site',pullNumber:1,headSha:'c'.repeat(40)},
+    {event:'COMMENT',body:'summary',comments:[{path:'a.tsx',line:3,side:'RIGHT',body:'finding'}]},
+    {conclusion:'neutral',title:'1 observation',summary:'advisory'});
+  expect(outcome.supersededCommentId).toBeUndefined();
+  expect(calls.some(r=>r.startsWith('DELETE'))).toBe(false);
+});

@@ -9,6 +9,36 @@ export type SuppressionReason=
   |'text_not_in_node'|'foreign_node'|'category_not_routed'|'evidence_not_supplied'
   |'below_confidence'|'verifier_suppressed'|'verifier_missing_verdict'|'below_minimum_severity';
 
+/**
+ * Language that belongs to the review machinery rather than to the author. A verifier that
+ * narrates its own checking, or names a candidate, is describing the process instead of the
+ * writing.
+ */
+const META_COMMENTARY=/\b(?:the\s+(?:proposed\s+)?(?:finding|candidate)|candidate\s*id|corrected\s*explanation|reason\s*if\s*suppressed|evidence\s+(?:id|identifier)|the\s+reviewer|this\s+(?:review|verification)|suppress(?:ed|ion)?\b)/iu;
+const WORDS=(value:string):string[]=>value.toLowerCase().match(/[\p{L}\p{N}']+/gu)??[];
+/** Long enough that ordinary prose will not collide, short enough to catch a quoted clause. */
+const ECHO_LENGTH=8;
+
+/**
+ * Rejects a verifier "correction" that is not actually addressed to the author.
+ *
+ * A weaker model repeats its own instructions back: one live run published the sentence
+ * "state the problem with their writing directly, in one or two sentences, addressed to them"
+ * into a real pull request, because the correction was checked only for placeholders and
+ * emptiness. Overlap is measured against the system prompt itself rather than a blacklist, so
+ * the check keeps working when the prompt is reworded.
+ */
+export function authorFacing(correction:string,system:string):boolean {
+  if(META_COMMENTARY.test(correction))return false;
+  const corrected=WORDS(correction);
+  if(corrected.length<ECHO_LENGTH)return true;
+  const instructions=WORDS(system);
+  const echoes=new Set<string>();
+  for(let index=0;index+ECHO_LENGTH<=instructions.length;index++)echoes.add(instructions.slice(index,index+ECHO_LENGTH).join(' '));
+  for(let index=0;index+ECHO_LENGTH<=corrected.length;index++)if(echoes.has(corrected.slice(index,index+ECHO_LENGTH).join(' ')))return false;
+  return true;
+}
+
 /** Placeholders a replacement must preserve, found in the reviewed text. */
 const placeholdersOf=(value:string):string[]=>[...value.matchAll(/\{\{[^{}]+\}\}|\$\{[^{}]+\}|\{[^{}]+\}|%(?:\d+\$)?[-+#0 ]*\d*(?:\.\d+)?[a-zA-Z]|%%/g)].map(match=>match[0]).sort();
 
@@ -133,7 +163,12 @@ export async function reviewNodes(snapshot:ReviewSnapshot,nodes:readonly Content
       // rather than trusted: a correction that drops a placeholder or empties the explanation
       // is discarded and the reviewer's original stands.
       const correctedExplanation=verdict.correctedExplanation?.trim();
-      const explanation=correctedExplanation?correctedExplanation:candidate.explanation;
+      // A correction is model output like any other. One that echoes the instructions or
+      // narrates the verification is discarded in favour of the reviewer's original, because
+      // the explanation is the only part of a finding the author actually reads.
+      const usableCorrection=correctedExplanation&&authorFacing(correctedExplanation,VERIFIER_SYSTEM);
+      if(correctedExplanation&&!usableCorrection)diagnosticCounts.set('CORRECTION_NOT_AUTHOR_FACING',(diagnosticCounts.get('CORRECTION_NOT_AUTHOR_FACING')??0)+1);
+      const explanation=usableCorrection?correctedExplanation:candidate.explanation;
       const corrected=verdict.correctedReplacement;
       const preservesPlaceholders=corrected===null||corrected===undefined
         ||JSON.stringify(placeholdersOf(candidate.exactText))===JSON.stringify(placeholdersOf(corrected));

@@ -1,7 +1,7 @@
 import { expect,it,vi } from 'vitest';
 import { Category,candidateDigest } from '@humanize/domain';
 import type { CandidateFinding,ContentNode,EvidenceRecord,ModelProvider,ReviewSnapshot } from '@humanize/domain';
-import { REVIEWER_SYSTEM,VERIFIER_SYSTEM,fence,reviewNodes } from './src/index.js';
+import { REVIEWER_SYSTEM,VERIFIER_SYSTEM,authorFacing,fence,reviewNodes } from './src/index.js';
 import type { CategoryName,NodeSignal } from './src/index.js';
 
 const headSha='b'.repeat(40);
@@ -171,4 +171,22 @@ it('revalidates a verifier correction instead of trusting it', async () => {
 
   const sound=await reviewNodes(snapshot,[withPlaceholder],ports([item],{results:[{candidateId:candidateDigest(item),publish:true,confidence:0.95,correctedExplanation:'Clearer wording.',correctedReplacement:'Hi {name}, {{count}} alerts are waiting',reasonIfSuppressed:null}]}),{enabled});
   expect(sound.findings[0]).toMatchObject({replacement:'Hi {name}, {{count}} alerts are waiting',explanation:'Clearer wording.'});
+});
+
+it('discards a verifier correction that echoes its own instructions',()=>{
+  // Observed live: llama3.2 repeated a sentence of the verifier system prompt into
+  // correctedExplanation, and it was published verbatim onto a real pull request.
+  const leaked='state the problem with their writing directly, in one or two sentences, addressed to them. The em-dash restates the heading.';
+  expect(authorFacing(leaked,VERIFIER_SYSTEM)).toBe(false);
+});
+
+it('discards a correction that narrates the verification instead of addressing the author',()=>{
+  expect(authorFacing('The proposed finding is a correct statement of the subject.',VERIFIER_SYSTEM)).toBe(false);
+  expect(authorFacing('This finding should be suppressed because the evidence id is missing.',VERIFIER_SYSTEM)).toBe(false);
+});
+
+it('keeps a correction that is genuinely written for the author',()=>{
+  expect(authorFacing('This heading repeats itself after the dash; say one thing instead.',VERIFIER_SYSTEM)).toBe(true);
+  expect(authorFacing('"unprecedented potential" promises a lot and says nothing specific.',VERIFIER_SYSTEM)).toBe(true);
+  expect(authorFacing('Too vague.',VERIFIER_SYSTEM)).toBe(true);
 });
