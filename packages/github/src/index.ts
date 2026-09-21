@@ -25,7 +25,7 @@ export function representableRange(diff:FileDiff,start:number,end:number):boolea
     &&diff.hunks.some(h=>start>=h.newStart&&end<h.newStart+h.newCount);
 }
 
-export { buildReview,buildCheck,renderComment,renderSummary,commentableLine,REVIEW_MARKER,commentMarker } from './publisher.js';
+export { agentPrompt,buildReview,buildCheck,renderComment,renderSummary,commentableLine,REVIEW_MARKER,commentMarker } from './publisher.js';
 export type { CheckConclusion,CheckPayload,PublishableFinding,ReviewComment,ReviewPayload } from './publisher.js';
 export { ReviewPublisher,StaleHeadError } from './transport.js';
 export { fetchDiffMap } from './diff-map.js';

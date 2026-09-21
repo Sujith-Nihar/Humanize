@@ -106,23 +106,25 @@ it('flags padded phrasing, which is distinct from promotional vocabulary', () =>
   expect(ids(make('Run the migration before starting the worker.'))).toEqual([]);
 });
 
-it('offers a deletion only where removing the construction is unambiguous',()=>{
-  const tagline=evaluateRules(make('Scientifically Engineered Sound — Designed for the Mind'),{})
-    .find(s=>s.ruleId==='construction:tagline-appositive');
-  expect(tagline?.replacement).toBe('Scientifically Engineered Sound');
-
+it('only ever deletes a negation, never a claim the author made',()=>{
+  // The single deletion offered anywhere: what is removed is a negation of the sentence beside
+  // it, so every positive statement survives.
   const strawman=evaluateRules(make('Each soundscape is intentionally designed — not randomly generated — to support focus.'),{})
     .find(s=>s.ruleId==='construction:strawman-contrast');
   expect(strawman?.replacement).toBe('Each soundscape is intentionally designed to support focus.');
 
-  // Rewriting prose is the model's job. A construction with no safe deletion offers nothing
-  // rather than guessing, and the finding stays comment-only.
-  const reframe=evaluateRules(make("It's Not Just Music — It's Science You Can Feel"),{})
-    .find(s=>s.ruleId==='construction:negation-reframe');
-  expect(reframe).toBeDefined();
-  expect(reframe?.replacement).toBeUndefined();
+  // An em-dash tagline is flagged but never deleted: "Designed for the Mind" states what the
+  // product is for, and an edit that loses information is not an improvement.
+  const tagline=evaluateRules(make('Scientifically Engineered Sound — Designed for the Mind'),{})
+    .find(s=>s.ruleId==='construction:tagline-appositive');
+  expect(tagline).toBeDefined();
+  expect(tagline?.replacement).toBeUndefined();
 
-  const opener=evaluateRules(make('In a world of endless playlists, we take a different approach.'),{})
-    .find(s=>s.ruleId==='construction:scene-setting-opener');
-  expect(opener?.replacement).toBeUndefined();
+  // Rewriting prose is a model's job, not a regular expression's.
+  for(const [text,ruleId] of [["It's Not Just Music — It's Science You Can Feel",'construction:negation-reframe'],
+    ['In a world of endless playlists, we take a different approach.','construction:scene-setting-opener']] as const){
+    const signal=evaluateRules(make(text),{}).find(s=>s.ruleId===ruleId);
+    expect(signal,ruleId).toBeDefined();
+    expect(signal?.replacement,ruleId).toBeUndefined();
+  }
 });

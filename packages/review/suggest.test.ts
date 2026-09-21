@@ -1,5 +1,5 @@
 import { expect,it } from 'vitest';
-import { attachSuggestions } from './src/index.js';
+import { attachSuggestions,informationLost } from './src/index.js';
 import type { ContentNode,DiffMap,ValidatedFinding } from '@humanize/domain';
 
 const SOURCE=`export const Hero = () => (\n  <h1>Scientifically Engineered Sound — Designed for the Mind</h1>\n);\n`;
@@ -52,4 +52,22 @@ it('leaves a comment-only finding alone',async()=>{
   expect(outcome.attached).toBe(0);
   // Nothing is fetched for a finding that proposes no replacement.
   expect(reads).toBe(0);
+});
+
+it('refuses a rewrite that drops a fact the author stated',async()=>{
+  // A suggestion changes how something is written, never what it says.
+  expect(informationLost('Reviews complete in 30 seconds on NeuroRhythms.','Reviews complete quickly.'))
+    .toEqual(['30','NeuroRhythms']);
+  expect(informationLost('Built for the JVM and the CLR.','Built for the JVM.')).toEqual(['CLR']);
+  // Rephrasing that keeps every fact is allowed through.
+  expect(informationLost('NeuroRhythms cuts review time by 40%.','NeuroRhythms reviews 40% faster.')).toEqual([]);
+  // Title case is not treated as proper nouns, or every heading would be unrewritable.
+  expect(informationLost('It Is Not Just Music','It is music')).toEqual([]);
+});
+
+it('does not build a patch when information would be lost',async()=>{
+  const findings=[finding('Scientifically Engineered Sound')];
+  findings[0]!.node.text='Scientifically Engineered Sound — Built for ADHD';
+  const outcome=await attachSuggestions(findings,diff,headSha,async()=>SOURCE);
+  expect(outcome).toEqual({attached:0,refused:{INFORMATION_LOST:1}});
 });

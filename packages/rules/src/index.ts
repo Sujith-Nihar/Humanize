@@ -65,7 +65,6 @@ interface Construction {
   /** Returns the node text with the construction removed, or undefined when no safe deletion exists. */
   rewrite?:(text:string)=>string|undefined;
 }
-const TAGLINE=/^(.*\S)\s*[—–]\s*(?:designed|built|engineered|crafted|tuned|made|optimi[sz]ed|powered|purpose-built)\s+(?:for|by|to)\b.*$/iu;
 const STRAWMAN_ASIDE=/\s*[—–]\s*not\s+(?:\w+ly\s+)?\w+(?:ed|ing)\b\s*[—–]\s*/giu;
 const CONSTRUCTIONS:readonly Construction[]=[
   // "It's not just music — it's science": asserts significance instead of stating any.
@@ -76,6 +75,9 @@ const CONSTRUCTIONS:readonly Construction[]=[
   // strawman sits between two dashes it is a clean aside, so deleting it is unambiguous.
   {ruleId:'construction:strawman-contrast',
    pattern:/[—–]\s*not\s+(?:\w+ly\s+)?\w+(?:ed|ing)\b/giu,
+   // The only deletion offered anywhere: the removed span is a NEGATION of the claim beside
+   // it, so dropping it leaves every positive statement intact. "intentionally designed —
+   // not randomly generated — to support X" still asserts intentional design.
    description:'Contrast drawn against an alternative nobody proposed',
    rewrite:text=>{
      const removed=text.replace(STRAWMAN_ASIDE,' ').replace(/\s{2,}/gu,' ').trim();
@@ -92,8 +94,10 @@ const CONSTRUCTIONS:readonly Construction[]=[
   // "Sound — Designed for the Mind": a tagline restating the heading, so dropping it is safe.
   {ruleId:'construction:tagline-appositive',
    pattern:/[—–]\s*(?:designed|built|engineered|crafted|tuned|made|optimi[sz]ed|powered|purpose-built)\s+(?:for|by|to)\b/giu,
-   description:'Em-dash tagline restating the heading rather than adding to it',
-   rewrite:text=>TAGLINE.exec(text)?.[1]?.trim()||undefined},
+   // Deliberately offers no rewrite. Deleting the appositive removes a claim the author
+   // made ("Designed for the Mind" says what the product is for), and an edit that loses
+   // information is not an improvement. Rewriting this needs a model, or a person.
+   description:'Em-dash tagline restating the heading rather than adding to it'},
 ];
 
 const SUPERLATIVES=/\b(?:most|best|greatest|ultimate|perfect|flawless|effortless|incredible|amazing|revolutionary|unparalleled|unmatched)\b/giu;
@@ -121,6 +125,22 @@ const sentences=(text:string):{text:string;start:number}[]=>{
     if(trimmed.length)result.push({text:trimmed,start:(match.index??0)+(match[0].length-trimmed.length)});
   }
   return result;
+};
+
+/**
+ * Independent families of evidence. Two signals from the same family are one observation, not
+ * two: counting occurrences instead of families would let a single habit corroborate itself.
+ * Aggregate families that ADR-037 already lets stand alone are excluded, since they publish on
+ * their own and must not also inflate a composite.
+ */
+const FAMILY_OF=(ruleId:string):string|null=>{
+  if(ruleId.startsWith('construction:'))return 'formulaic construction';
+  if(ruleId.startsWith('punctuation:'))return 'punctuation profile';
+  if(ruleId.startsWith('promotional:'))return 'low-information vocabulary';
+  if(ruleId.startsWith('padding:'))return 'padded phrasing';
+  if(ruleId==='uniform-sentence-length')return 'uniform sentence rhythm';
+  if(ruleId==='superlative-density'||ruleId==='adverb-density')return 'modifier density';
+  return null;
 };
 
 function signal(node:ContentNode,input:Omit<RuleSignal,'evidence'|'matchedText'>&{matchedText?:string}):RuleSignal {
@@ -168,8 +188,11 @@ export function evaluateRules(node:ContentNode,config:RuleConfiguration={}):Rule
     for(const match of text.matchAll(construction.pattern)){
       const start=match.index??0;
       const rewritten=construction.rewrite?.(text);
+      // Not standalone on its own. "It's not X, it's Y" appears in Shakespeare and the Bible;
+      // an em-dash aside is ordinary craft. A construction becomes publishable only when a
+      // second, independent family corroborates it — see the composite signal below.
       signals.push(signal(node,{ruleId:construction.ruleId,category:'ai_like_generic',severity:'minor',
-        start,end:start+match[0].length,description:construction.description,blocking:false,standalone:true,
+        start,end:start+match[0].length,description:construction.description,blocking:false,
         ...(rewritten!==undefined&&rewritten!==text?{replacement:rewritten}:{})}));
     }
   }
@@ -192,6 +215,21 @@ export function evaluateRules(node:ContentNode,config:RuleConfiguration={}):Rule
     for(const match of text.matchAll(new RegExp(escape(rule.phrase),'giu'))){
       const start=match.index??0;
       signals.push(signal(node,{ruleId:`forbidden:${rule.phrase}`,category:'terminology',severity:'major',start,end:start+match[0].length,description:`Prohibited phrase: ${rule.phrase}`,blocking:true}));
+    }
+  }
+
+  // Punctuation profile. Editors report the em dash as the most visible marker, and the same
+  // reporting is explicit that it cannot carry a judgement alone: models learned it from
+  // well-edited human prose. It is therefore evidence only, and never a finding.
+  const emDashes=[...text.matchAll(/[—–]/gu)];
+  if(emDashes.length>0){
+    const words=text.split(/\s+/u).filter(Boolean).length;
+    const dense=emDashes.length>=2||(words>0&&words<=14&&emDashes.length>=1);
+    if(dense){
+      const first=emDashes[0]!;
+      signals.push(signal(node,{ruleId:'punctuation:em-dash',category:'ai_like_generic',severity:'nit',
+        start:first.index??0,end:(first.index??0)+1,
+        description:`${emDashes.length} em dash${emDashes.length===1?'':'es'} in ${words} words`,blocking:false}));
     }
   }
 
@@ -234,6 +272,27 @@ export function evaluateRules(node:ContentNode,config:RuleConfiguration={}):Rule
     signals.push(signal(node,{ruleId:'promotional-cluster',category:'ai_like_generic',severity:'minor',
       start:first.start,end:Math.min(text.length,promotional.reduce((last,entry)=>Math.max(last,entry.end),0)),
       description:`${distinct.size} low-information promotional phrases in one passage`,blocking:false,standalone:true}));
+  }
+
+  /**
+   * Corroboration. No single marker is trustworthy: the em dash was learned from well-edited
+   * human prose, and "not X, it's Y" predates the machines by several centuries. The research
+   * consensus is that combined feature sets are far stronger than any one signal, so a finding
+   * is published only where independent families agree on the same passage.
+   *
+   * Families are counted, not occurrences: three em dashes remain one observation.
+   */
+  const families=new Set(signals.map(entry=>FAMILY_OF(entry.ruleId)).filter((name):name is string=>name!==null));
+  if(families.size>=2){
+    const corroborating=signals.filter(entry=>FAMILY_OF(entry.ruleId)!==null);
+    const earliest=corroborating.reduce((first,entry)=>entry.start<first.start?entry:first,corroborating[0]!);
+    // The finding carries the strongest member's replacement, where one exists, so a proven
+    // deletion is still offered; the composite itself never invents a rewrite.
+    const rewritable=corroborating.find(entry=>entry.replacement!==undefined);
+    signals.push(signal(node,{ruleId:'ai-style:corroborated',category:'ai_like_generic',severity:'minor',
+      start:earliest.start,end:earliest.end,matchedText:earliest.matchedText,
+      description:`${[...families].sort().join(' and ')} together in one passage: ${corroborating.map(entry=>entry.description).join('; ')}`,
+      blocking:false,standalone:true,...(rewritable?.replacement!==undefined?{replacement:rewritable.replacement}:{})}));
   }
 
   // A deterministic order keeps rule output reproducible for evaluation and ranking.

@@ -69,3 +69,16 @@ it('never fails a check for subjective findings, only for a configured rule', ()
   expect(buildCheck([finding(),finding({severity:'major'})])).toMatchObject({conclusion:'neutral'});
   expect(buildCheck([finding({deterministic:true,blocking:true,category:'terminology'})])).toMatchObject({conclusion:'failure'});
 });
+
+it('gives an agent the constraint, not just the complaint',()=>{
+  const body=renderComment(finding({explanation:'Em-dash tagline restating the heading'}));
+  expect(body).toContain('🤖 Prompt for AI agents');
+  // An agent told only that text is generic will delete it. The constraint is what stops a
+  // rewrite from quietly losing what the author said.
+  expect(body).toContain('Keep every fact, number, product name and claim');
+  expect(body).toContain('Do not delete the sentence');
+  expect(body).toContain('leave surrounding markup and code untouched');
+  // Collapsed, so it never competes with the sentence a person reads.
+  expect(body).toContain('<details>');
+  expect(body.indexOf('Em-dash tagline restating the heading')).toBeLessThan(body.indexOf('<details>'));
+});

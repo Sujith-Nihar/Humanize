@@ -1,6 +1,26 @@
 import { buildSuggestion } from '@humanize/suggestions';
 import type { DiffMap, ValidatedFinding } from '@humanize/domain';
 
+/**
+ * Concrete facts a rewrite must carry over: numbers and percentages, acronyms, brand tokens
+ * with internal capitals, and URLs. Ordinary capitalisation is deliberately not a signal,
+ * because headings are often title case and every word would look like a proper noun.
+ */
+const FACTS=/\d[\d.,]*%?|\b[A-Z]{2,}\b|\b[A-Za-z]+[A-Z][A-Za-z]*\b|https?:\/\/\S+/gu;
+
+/**
+ * Facts present in the original that the replacement drops.
+ *
+ * A suggestion changes how something is written, never what it says. This is a backstop and
+ * not a semantic guarantee — it cannot tell that dropping a clause lost a claim — so it is
+ * paired with rules that decline to propose a deletion at all unless what they remove is a
+ * negation of the sentence beside it.
+ */
+export function informationLost(original:string,replacement:string):string[] {
+  const present=new Set(replacement.match(FACTS)??[]);
+  return [...new Set(original.match(FACTS)??[])].filter(fact=>!present.has(fact));
+}
+
 /** Reads a file at the reviewed commit. The control plane fetches it itself (ADR-026). */
 export type SourceReader = (filePath: string) => Promise<string | null>;
 
@@ -30,6 +50,11 @@ export async function attachSuggestions(
     if (!sources.has(path)) sources.set(path, await read(path));
     const source = sources.get(path) ?? null;
     if (source === null) { refused.SOURCE_UNAVAILABLE = (refused.SOURCE_UNAVAILABLE ?? 0) + 1; continue; }
+
+    // An edit that drops a number, an acronym or a brand name is not a rewrite, it is a
+    // deletion wearing a rewrite's clothes. Refused before the patch is even built.
+    const lost = informationLost(finding.node.text, finding.replacement);
+    if (lost.length > 0) { refused.INFORMATION_LOST = (refused.INFORMATION_LOST ?? 0) + 1; continue; }
 
     const changedLines = diff.files.find(file => file.newPath === path)?.addedLines ?? [];
     const built = buildSuggestion({ node: finding.node, replacement: finding.replacement, source, headSha, changedLines });

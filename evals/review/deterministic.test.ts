@@ -31,15 +31,29 @@ it('never raises a standalone finding on content labelled do-not-comment', () =>
   expect(wrong, `standalone rules fired on sound writing: ${JSON.stringify(wrong)}`).toEqual([]);
 });
 
-it('reports the structural constructions the phrase lists cannot see', () => {
-  // These are verbatim from a real pull request that the product reviewed and passed clean.
-  const structural = ['negation-reframe-hero', 'negation-reframe-inline', 'negation-reframe-nojust',
-    'formulaic-opener-world', 'tagline-appositive'];
-  const missed = structural.filter(id => {
-    const testCase = REVIEW_GOLD.find(c => c.id === id)!;
-    return standaloneSignals(testCase.text, testCase.kind).length === 0;
+it('observes every structural construction, and publishes only the corroborated ones',()=>{
+  // All five are seen. Whether one is published depends on corroboration, because no single
+  // marker is trustworthy: "not X, it's Y" predates the machines and the em dash was learned
+  // from well-edited human prose.
+  const structural=['negation-reframe-hero','negation-reframe-inline','negation-reframe-nojust',
+    'formulaic-opener-world','tagline-appositive'];
+  const unobserved=structural.filter(id=>{
+    const testCase=REVIEW_GOLD.find(c=>c.id===id)!;
+    return !evaluateRules(node('n',testCase.kind,testCase.text),{}).some(s=>s.ruleId.startsWith('construction:'));
   });
-  expect(missed, `structural constructions not detected: ${missed.join(', ')}`).toEqual([]);
+  expect(unobserved,`constructions not even observed: ${unobserved.join(', ')}`).toEqual([]);
+
+  // Corroborated: a construction plus an independent family in the same passage.
+  for(const id of ['negation-reframe-hero','negation-reframe-inline','tagline-appositive']){
+    const testCase=REVIEW_GOLD.find(c=>c.id===id)!;
+    expect(standaloneSignals(testCase.text,testCase.kind).length,id).toBeGreaterThan(0);
+  }
+  // Uncorroborated: observed, held back, and left to the model to judge. Recording this
+  // deliberately, so a later change that publishes them is a visible decision.
+  for(const id of ['negation-reframe-nojust','formulaic-opener-world']){
+    const testCase=REVIEW_GOLD.find(c=>c.id===id)!;
+    expect(standaloneSignals(testCase.text,testCase.kind),id).toHaveLength(0);
+  }
 });
 
 it('measures deterministic coverage across the whole corpus', () => {
@@ -51,7 +65,7 @@ it('measures deterministic coverage across the whole corpus', () => {
   // Precision of the deterministic layer must be perfect: it answers to no verifier.
   expect(falsePositives).toHaveLength(0);
   // Recall is partial by design — the model covers what rules cannot — but it must not regress.
-  expect(caught.length).toBeGreaterThanOrEqual(8);
+  expect(caught.length).toBeGreaterThanOrEqual(10);
 
   console.log(`deterministic layer: ${caught.length}/${positives.length} flagged, ` +
     `0/${negatives.length} false positives (${(caught.length / positives.length * 100).toFixed(0)}% recall, 100% precision)`);

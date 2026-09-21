@@ -33,7 +33,39 @@ export function renderComment(finding:PublishableFinding):string {
     // A native suggestion block is the only fix mechanism; it needs no write permission.
     lines.push('','```suggestion',finding.suggestion.replacement,'```');
   }
+  lines.push('',...agentPrompt(finding));
   return lines.join('\n');
+}
+
+/**
+ * A block a coding agent can act on directly, collapsed so it never competes with the sentence
+ * a person reads.
+ *
+ * It restates the location, the observation and the constraint. The constraint is the important
+ * part: an agent told only "this is generic" will happily delete the sentence, which is how a
+ * rewrite loses the author's meaning. Everything here is already visible in the comment above
+ * it, so the block discloses nothing new.
+ */
+export function agentPrompt(finding:PublishableFinding):string[] {
+  const location=`${finding.node.filePath} line ${finding.node.startLine}`;
+  return [
+    '<details>',
+    '<summary>🤖 Prompt for AI agents</summary>',
+    '',
+    '```',
+    `In ${location}, rewrite this user-visible text:`,
+    '',
+    finding.node.text,
+    '',
+    `Problem: ${finding.explanation}`,
+    'Rewrite it so a person would plausibly have written it, in the voice of the surrounding',
+    'copy. Keep every fact, number, product name and claim the original makes - the goal is to',
+    'change how it reads, not what it says. Do not delete the sentence, and do not replace it',
+    'with something vaguer. Change only this text; leave surrounding markup and code untouched.',
+    '```',
+    '',
+    '</details>',
+  ];
 }
 
 /** A comment may only be attached to a right-hand-side line the pull request actually changed. */
