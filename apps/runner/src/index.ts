@@ -1,4 +1,4 @@
-export { RunnerClient,LeaseLostError,RunnerUnauthorizedError,TransportError } from './client.js';
+export { RunnerClient,LeaseLostError,RequestRejectedError,RunnerUnauthorizedError,TransportError } from './client.js';
 export type { Lease,LeaseCredential,RunnerClientOptions } from './client.js';
 export { runLease } from './lease.js';
 export type { LeaseExecutor,LeaseOutcome,LeaseSessionOptions } from './lease.js';

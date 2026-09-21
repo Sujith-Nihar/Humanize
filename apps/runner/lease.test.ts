@@ -72,15 +72,15 @@ it('gives up when a partition outlasts the lease', async()=>{
 
 it('reports a retryable failure and a permanent failure differently', async()=>{
   const retryableApi=client();
-  await expect(runLease(retryableApi,lease,async()=>{throw Error('extraction timed out');},options)).resolves.toEqual({status:'failed',retryable:true});
+  await expect(runLease(retryableApi,lease,async()=>{throw Error('extraction timed out');},options)).resolves.toEqual({status:'failed',retryable:true,errorClass:'extraction timed out'});
   expect(retryableApi.fail).toHaveBeenCalledWith(lease.leaseId,lease.fence,true);
 
   const permanentApi=client();
-  await expect(runLease(permanentApi,lease,async()=>{throw Object.assign(Error('model not installed'),{retryable:false});},options)).resolves.toEqual({status:'failed',retryable:false});
+  await expect(runLease(permanentApi,lease,async()=>{throw Object.assign(Error('model not installed'),{retryable:false});},options)).resolves.toEqual({status:'failed',retryable:false,errorClass:'model not installed'});
   expect(permanentApi.fail).toHaveBeenCalledWith(lease.leaseId,lease.fence,false);
 
   const unauthorizedApi=client();
-  await expect(runLease(unauthorizedApi,lease,async()=>{throw new RunnerUnauthorizedError();},options)).resolves.toEqual({status:'failed',retryable:false});
+  await expect(runLease(unauthorizedApi,lease,async()=>{throw new RunnerUnauthorizedError();},options)).resolves.toEqual({status:'failed',retryable:false,errorClass:'RUNNER_UNAUTHORIZED'});
 });
 
 it('treats a lease lost while reporting a failure as lost, not failed', async()=>{

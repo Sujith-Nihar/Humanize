@@ -1,5 +1,5 @@
 import { expect,it } from 'vitest';
-import { attachSuggestions,informationLost } from './src/index.js';
+import { attachSuggestions,informationLoss } from './src/index.js';
 import type { ContentNode,DiffMap,ValidatedFinding } from '@humanize/domain';
 
 const SOURCE=`export const Hero = () => (\n  <h1>Scientifically Engineered Sound — Designed for the Mind</h1>\n);\n`;
@@ -54,20 +54,37 @@ it('leaves a comment-only finding alone',async()=>{
   expect(reads).toBe(0);
 });
 
-it('refuses a rewrite that drops a fact the author stated',async()=>{
-  // A suggestion changes how something is written, never what it says.
-  expect(informationLost('Reviews complete in 30 seconds on NeuroRhythms.','Reviews complete quickly.'))
-    .toEqual(['30','NeuroRhythms']);
-  expect(informationLost('Built for the JVM and the CLR.','Built for the JVM.')).toEqual(['CLR']);
-  // Rephrasing that keeps every fact is allowed through.
-  expect(informationLost('NeuroRhythms cuts review time by 40%.','NeuroRhythms reviews 40% faster.')).toEqual([]);
-  // Title case is not treated as proper nouns, or every heading would be unrewritable.
-  expect(informationLost('It Is Not Just Music','It is music')).toEqual([]);
+it('refuses a rewrite that drops what the author said',async()=>{
+  // All three observed on live model output against a real pull request.
+  expect(informationLoss('Get Started — Listen Now','—')).toContain('TEXT_TRUNCATED');
+  expect(informationLoss(
+    'Your journey with scientifically designed music begins here — no guesswork, just sound engineered for how the brain actually works.',
+    'no guesswork, just sound engineered for how the brain actually works')).toContain('TEXT_TRUNCATED');
+  expect(informationLoss('Reviews complete in 30 seconds on NeuroRhythms.','Reviews complete quickly on NeuroRhythms every time.')).toContain('FACT_DROPPED');
+
+  // A genuine rewrite of similar length that keeps the meaning is allowed through.
+  expect(informationLoss('NeuroRhythms cuts review time by 40%.','NeuroRhythms reviews 40% faster.')).toEqual([]);
+  // The sanctioned deletion - removing a negation - shrinks a little and stays allowed.
+  expect(informationLoss(
+    'Each soundscape is intentionally designed — not randomly generated — to support a specific mental state, from deep focus to restorative rest.',
+    'Each soundscape is intentionally designed to support a specific mental state, from deep focus to restorative rest.')).toEqual([]);
+  // Title case is not treated as proper nouns, or no heading could ever be rewritten.
+  expect(informationLoss('It Is Not Just Music','It is music about focus')).not.toContain('FACT_DROPPED');
 });
 
 it('does not build a patch when information would be lost',async()=>{
   const findings=[finding('Scientifically Engineered Sound')];
   findings[0]!.node.text='Scientifically Engineered Sound — Built for ADHD';
   const outcome=await attachSuggestions(findings,diff,headSha,async()=>SOURCE);
-  expect(outcome).toEqual({attached:0,refused:{INFORMATION_LOST:1}});
+  expect(outcome.attached).toBe(0);
+  expect(Object.keys(outcome.refused)).toContain('FACT_DROPPED');
+});
+
+it('refuses the deletion that prompted this check, whoever proposes it',()=>{
+  // The rule no longer offers this, but a model might. The floor is set above it deliberately.
+  expect(informationLoss('Scientifically Engineered Sound — Designed for the Mind','Scientifically Engineered Sound'))
+    .toContain('TEXT_TRUNCATED');
+  // A rewrite of comparable length that changes only the style still passes.
+  expect(informationLoss('Unlock unprecedented potential with our cutting-edge platform','Manage your team schedule from one place'))
+    .toEqual([]);
 });

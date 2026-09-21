@@ -5,6 +5,17 @@ export class LeaseLostError extends Error { constructor(){super('LEASE_LOST');th
 export class RunnerUnauthorizedError extends Error { constructor(){super('RUNNER_UNAUTHORIZED');this.name='RunnerUnauthorizedError';} }
 /** Anything that may succeed on a later attempt: timeouts, partitions and 5xx responses. */
 export class TransportError extends Error { constructor(readonly cause:string){super('RUNNER_TRANSPORT_FAILED');this.name='TransportError';} }
+/**
+ * The control plane refused this request and said why. The code travels with the error because
+ * a runner that only knows "4xx" cannot tell an operator whether its result was malformed, too
+ * large, or describing content the control plane could not verify.
+ */
+export class RequestRejectedError extends Error {
+  constructor(readonly status:number,readonly code:string,readonly detail:string){
+    super(`RUNNER_REQUEST_REJECTED ${status} ${code}${detail?` ${detail}`:''}`);
+    this.name='RequestRejectedError';
+  }
+}
 
 const Remaining=z.number().int().nonnegative().max(24*60*60*1000);
 const LeaseResponse=z.object({leaseId:z.string().uuid(),fence:z.number().int().positive(),runId:z.string().uuid(),expiresAt:z.string().min(1),expiresInMs:Remaining,snapshot:ReviewSnapshotSchema}).strict();
@@ -49,7 +60,16 @@ export class RunnerClient {
     if(response.status===409)throw new LeaseLostError();
     if(response.status===204)return null;
     if(response.status>=500)throw new TransportError(`status_${response.status}`);
-    if(response.status>=400)throw Error('RUNNER_REQUEST_REJECTED');
+    if(response.status>=400){
+      // Codes only: the control plane never echoes the payload, so nothing here can leak content.
+      let code='UNKNOWN',detail='';
+      try{
+        const body=await response.json() as {error?:unknown;violations?:unknown};
+        if(typeof body.error==='string')code=body.error;
+        if(Array.isArray(body.violations))detail=body.violations.filter(v=>typeof v==='string').join(',');
+      }catch{/* a body that is not JSON tells us nothing extra */}
+      throw new RequestRejectedError(response.status,code,detail);
+    }
     if(!schema)return null;
     let payload:unknown;
     try{payload=await response.json();}catch{throw new TransportError('invalid_json');}

@@ -64,7 +64,7 @@ await pollForWork(client,async({lease,credential:jobCredential,signal})=>{
   signal:controller.signal,
   // Every outcome is reported. A lease that is lost or fails must not look like idleness.
   onOutcome:outcome=>{console.log(JSON.stringify({event:'lease.outcome',status:outcome.status,
-    ...(outcome.status==='failed'?{retryable:outcome.retryable}:{})}));},
+    ...(outcome.status==='failed'?{retryable:outcome.retryable,errorClass:outcome.errorClass}:{})}));},
   // The control plane validates and publishes; the runner only reports what it found.
   report:async value=>{
     const {duplicate}=await client.uploadResult((value as {result:RunnerResult}).result);

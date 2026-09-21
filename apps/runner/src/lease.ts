@@ -3,7 +3,7 @@ import type { Lease,LeaseCredential,RunnerClient } from './client.js';
 
 /** Receives the lease and a signal that aborts the moment the lease stops being held. */
 export type LeaseExecutor<T>=(context:{lease:Lease;credential:LeaseCredential;signal:AbortSignal})=>Promise<T>;
-export type LeaseOutcome<T>={status:'completed';value:T}|{status:'lost'}|{status:'failed';retryable:boolean};
+export type LeaseOutcome<T>={status:'completed';value:T}|{status:'lost'}|{status:'failed';retryable:boolean;errorClass:string};
 
 export interface LeaseSessionOptions { renewIntervalMs?:number; safetyMarginMs?:number; now?:()=>number; }
 
@@ -68,7 +68,7 @@ export async function runLease<T>(client:RunnerClient,lease:Lease,execute:LeaseE
     const permanent=!retryable(error);
     try{await client.fail(lease.leaseId,lease.fence,!permanent);}
     catch(reportFailure){if(reportFailure instanceof LeaseLostError)return {status:'lost'};}
-    return {status:'failed',retryable:!permanent};
+    return {status:'failed',retryable:!permanent,errorClass:error instanceof Error?error.message.slice(0,200):'UNKNOWN'};
   }finally{
     if(timer)clearTimeout(timer);
     // Aborting on the way out tells anything still holding the signal to drop the credential.
