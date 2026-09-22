@@ -1,5 +1,6 @@
-import type { ContentNode,EvidenceRecord } from '@humanize/domain';
+import type { EvidenceRecord } from '@humanize/domain';
 import type { CategoryName } from './router.js';
+import type { ReviewableUnit } from './core.js';
 
 /**
  * Repository text is data, never instruction. It is fenced with an unguessable marker and the
@@ -39,27 +40,33 @@ function renderEvidence(evidence:readonly EvidenceRecord[],marker:string):string
   }).join('\n\n');
 }
 
-export function reviewerInput(input:{node:ContentNode;categories:readonly CategoryName[];evidence:readonly EvidenceRecord[];ruleNotes:readonly string[];marker:string}):string {
-  const {node,marker}=input;
+/**
+ * `contextLabel` carries whatever caller-specific framing line belongs after the nodeId
+ * statement (the GitHub path renders its content kind and file path into it); it is optional and
+ * omitted entirely when absent, so this function itself asserts nothing about where a
+ * ReviewableUnit's text came from.
+ */
+export function reviewerInput(input:{unit:ReviewableUnit;contextLabel?:string;categories:readonly CategoryName[];evidence:readonly EvidenceRecord[];ruleNotes:readonly string[];marker:string}):string {
+  const {unit,marker}=input;
   return [
     // The schema requires a nodeId, so the prompt must state which one; a model that has to
     // guess it produces findings the orchestrator then discards as belonging to another node.
-    `Reviewing nodeId "${node.id}". Every candidate you return must use exactly that nodeId.`,
-    `Content kind: ${node.kind}. Source: ${node.filePath}.`,
+    `Reviewing nodeId "${unit.id}". Every candidate you return must use exactly that nodeId.`,
+    input.contextLabel??'',
     `Review only these categories: ${input.categories.join(', ')}.`,
-    input.node.placeholders.length?`Placeholders that must survive any replacement: ${node.placeholders.join(', ')}.`:'',
+    unit.placeholders.length?`Placeholders that must survive any replacement: ${unit.placeholders.join(', ')}.`:'',
     input.ruleNotes.length?`Deterministic signals already detected: ${input.ruleNotes.join('; ')}.`:'',
     'Reviewed content:',
-    fence(marker,'reviewed-content',node.text),
+    fence(marker,'reviewed-content',unit.text),
     'Repository evidence:',
     renderEvidence(input.evidence,marker),
   ].filter(Boolean).join('\n\n');
 }
 
-export function verifierInput(input:{node:ContentNode;candidates:readonly {id:string;category:string;severity:string;exactText:string;explanation:string}[];evidence:readonly EvidenceRecord[];marker:string}):string {
+export function verifierInput(input:{unit:ReviewableUnit;candidates:readonly {id:string;category:string;severity:string;exactText:string;explanation:string}[];evidence:readonly EvidenceRecord[];marker:string}):string {
   return [
     'Reviewed content:',
-    fence(input.marker,'reviewed-content',input.node.text),
+    fence(input.marker,'reviewed-content',input.unit.text),
     'Repository evidence:',
     renderEvidence(input.evidence,input.marker),
     'Proposed findings:',

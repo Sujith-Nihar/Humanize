@@ -25,7 +25,7 @@ it('fences every injection attempt as quoted content it must not obey', () => {
   for(const attack of PROMPT_INJECTION){
     const target=node(attack.content);
     const marker=`hz-${'a'.repeat(24)}`;
-    const input=reviewerInput({node:target,categories:['ai_like_generic'],evidence:[],ruleNotes:[],marker});
+    const input=reviewerInput({unit:{id:target.id,text:target.text,placeholders:target.placeholders},categories:['ai_like_generic'],evidence:[],ruleNotes:[],marker});
     // The content sits inside a boundary it cannot close, because it cannot guess the marker.
     expect(input,attack.id).toContain(`<reviewed-content boundary="${marker}">`);
     expect(input.split(`</reviewed-content boundary="${marker}">`),attack.id).toHaveLength(2);
