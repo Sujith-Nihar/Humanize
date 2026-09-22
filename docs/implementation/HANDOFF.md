@@ -1,5 +1,9 @@
 # Agent handoff
 
+**Resuming? Start with [plan-production-review.md](plan-production-review.md).** It holds the agreed
+next seven stages, the decisions already taken and the measurement that would show each stage
+failed. Stage 1 (batching model calls) is the next piece of work and nothing has begun on it.
+
 Read [STATUS.md](STATUS.md), [AGENTS.md](../../AGENTS.md), and the assigned task before editing. Task records and the manifest track implementation and remaining acceptance. The append-only [progress log](evidence/progress.jsonl) preserves earlier checkpoints; newer evidence supersedes earlier failures.
 
 Sessions of 2026-09-17 and 2026-09-18. The user asked for everything on the critical path that does not need GitHub credentials, which they will supply afterwards. Work covered the runner digest defect, S07 lease acceptance, the runner identity transport, job-scoped GitHub credential issuance, the outbound lease protocol, result upload with independent validation, and the first four S08 tasks: trusted configuration, ephemeral lexical context, deterministic rules and routing, and the reviewer and verifier pipeline. ADR-036 was decided and implemented. Every S07 task now has implementation and evidence. All work is still uncommitted in the local working tree.
@@ -514,6 +518,60 @@ untouched; a model rewrite preserved a trailing `{" "}` on the same line.
 - Review latency is **10 to 13 minutes** for 12 changed nodes: a reviewer and a verifier call per
   node, sequentially, against a local model.
 - `REVIEW_FAILED_TIMEOUT` appears on one or two nodes per run and is not yet explained.
+
+## Session of 2026-09-21, second half: making the reviewer worth installing
+
+The product reviewed a live pull request written deliberately in an AI voice and published
+*Nothing to flag*. Everything below came out of chasing that.
+
+**Detection was blind to the shape of the writing, not its vocabulary.** Five formulaic
+constructions and a punctuation family were added. Then, on reading the research, the design
+changed: no single marker carries a judgement — the em dash was learned from well-edited human
+prose and `not X, it's Y` predates the machines — so a construction is **evidence**, and a finding
+publishes only where **two independent families agree** on one passage. Families are counted, not
+occurrences. Measured with no model, in the default lane: 7/15 → 12/15 → **10/15** positives as
+corroboration was added, **0/20 false positives throughout**. The method, sources and gaps are in
+[ai-style-methodology.md](../evaluation/ai-style-methodology.md); the decision is
+[ADR-039](../adr/ADR-039.md) as amended.
+
+**Two destructive suggestions reached a real pull request.** A model proposed replacing the button
+text "Get Started — Listen Now" with the single character `—`, and truncating a sentence to its
+trailing clause. A facts-only check passed both, because neither contains a number or a brand
+name. A replacement must now keep **0.7 of the original content words** — a floor derived from the
+case the user rejected (deleting "— Designed for the Mind" leaves 0.6), not guessed. A rule may
+now only delete a **negation** of the claim beside it; the tagline deletion was withdrawn.
+
+**Comments carry a collapsed `🤖 Prompt for AI agents` block** stating the constraint rather than
+the complaint: keep every fact and claim, do not delete the sentence, do not make it vaguer.
+
+**Two mistakes worth knowing about.** A failing test was committed because a `grep` in a command
+chain masked a non-zero exit — check `pnpm check` by exit code, not by grepping its output. And an
+upload failure was caused by my own process kills rather than a defect, though it did expose that
+a failed lease logged only a boolean; a rejected upload now carries the control-plane's code.
+
+### The finding that shapes the next stage
+
+`reviewNodes` calls the model **once per node, sequentially**. The architecture specifies
+**20 nodes per model batch** (`LIMITS.nodeBatch`), and that constant is only used as a cap on how
+many nodes to review at all. Twelve changed nodes therefore cost 24 round-trips, which is the
+entire 10–13 minute review time. Batching is stage 1 of the plan for that reason: every later
+experiment is gated on a measurement loop short enough to run.
+
+### Environment, to resume
+
+Postgres is up. The API, worker, runner and the smee forwarder were running when this session
+ended; restart them with `source ~/.config/humanize/dev-env.sh` and `pnpm dev:api`, `dev:worker`,
+`dev:runner`, plus
+`pnpm dlx smee-client --url https://smee.io/vTCDOgVlNbYFaWQn --target http://127.0.0.1:3001/webhooks/github`.
+The runner needs `HUMANIZE_RUNNER_TOKEN="$(cat ~/.config/humanize/runner-token)"`.
+
+**All four must be running for a review to happen**, and a killed smee forwarder is silent: GitHub
+accepts the delivery, nothing arrives, and no run is created. Ollama must also be running, which
+it was not once this session; the runner exits with a readable message when it is not.
+
+To force a fresh review of the same head, clear the run rows and the delivery tombstone and
+redeliver through `GitHubTokenBroker.redeliver`. That is test setup, not a product path: a
+redelivery is deduplicated by design (INV-009), and an unchanged configuration reuses the run.
 
 ## Verified results and unverified work
 

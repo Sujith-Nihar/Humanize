@@ -2,6 +2,9 @@
 
 Approved execution order is S00–S20. Task IDs are immutable. A task is complete only with evidence; later stages do not waive earlier missing live or human validation.
 
+The agreed next work, its decisions and its measurements are in
+[plan-production-review.md](plan-production-review.md).
+
 ## Stages
 
 ### P1-S00 — Documentation and architecture agreement
