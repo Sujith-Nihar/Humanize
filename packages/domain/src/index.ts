@@ -203,3 +203,66 @@ export function validateRunnerResult(result:RunnerResult,snapshot:ReviewSnapshot
   }
   return [...violations].sort();
 }
+
+// Browser-originated review requests (ADR-040, docs/architecture/browser-text.md). Deliberately
+// independent of ContentNode and ReviewSnapshot: browser-selected text has no repository,
+// commit, blob or file identity, and this contract must never be widened to fabricate one.
+export const BROWSER_TEXT_SCHEMA_VERSION='humanize-browsertext-v1' as const;
+/** Placeholder starting limit for the first version of the browser surface; see docs/architecture/browser-review-api.md. */
+export const BrowserTextLimits=Object.freeze({textChars:2000});
+
+export const BrowserSourceType=z.enum(['webpage_selection','editor_selection','devtools_selection']);
+export const BrowserDocumentType=z.enum(['html','markdown','plaintext']);
+
+/** Hostname only: no scheme, path, query, fragment, port or credentials. */
+const BrowserHostname=z.string().min(1).max(253)
+  .refine(v=>!/[\s/?#@:]/.test(v),'Hostname must not carry a path, query, fragment, port or credentials')
+  .refine(v=>/^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$/i.test(v),'Invalid hostname');
+/** A coarse client family/version such as "chrome/128", never a full user-agent string. */
+const BrowserFamily=z.string().min(1).max(50).regex(/^[a-zA-Z][a-zA-Z0-9._/-]{0,49}$/,'Invalid browser family');
+
+// Deliberately the only three fields: no full URL, page title, cookies, DOM selectors, headers
+// or a fingerprinting-grade user agent (docs/architecture/browser-text.md §7).
+export const BrowserOriginMetadataSchema=z.object({
+  hostname:BrowserHostname.optional(),
+  documentType:BrowserDocumentType.optional(),
+  browserFamily:BrowserFamily.optional(),
+}).strict();
+export type BrowserOriginMetadata=z.infer<typeof BrowserOriginMetadataSchema>;
+
+export const CharacterRangeSchema=z.object({
+  start:z.number().int().nonnegative(),
+  end:z.number().int().nonnegative(),
+}).strict().refine(v=>v.end>=v.start,'Invalid character range');
+export type CharacterRange=z.infer<typeof CharacterRangeSchema>;
+
+/**
+ * True unless `offset` falls strictly between the two UTF-16 code units of one surrogate pair,
+ * which would split a single character and corrupt any substring taken at that boundary.
+ */
+function isCodePointBoundary(text:string,offset:number):boolean {
+  if(offset<=0||offset>=text.length)return true;
+  const before=text.charCodeAt(offset-1),after=text.charCodeAt(offset);
+  return !(before>=0xd800&&before<=0xdbff&&after>=0xdc00&&after<=0xdfff);
+}
+
+/**
+ * The smallest domain representation of browser-submitted text (ADR-040). `characterRange` is
+ * zero-based, half-open and refers only to `text` itself — never to page or DOM coordinates,
+ * which this contract has no field for and must never gain one to accommodate. A model may later
+ * propose a quotation from `text`, but never a coordinate into it; nothing here changes that.
+ */
+export const BrowserTextSchema=z.object({
+  schemaVersion:z.literal(BROWSER_TEXT_SCHEMA_VERSION),
+  requestId:z.string().uuid(),
+  text:z.string().min(1).max(BrowserTextLimits.textChars),
+  characterRange:CharacterRangeSchema,
+  sourceType:BrowserSourceType,
+  originMetadata:BrowserOriginMetadataSchema.optional(),
+  language:z.string().default('en'),
+}).strict().superRefine((v,ctx)=>{
+  if(v.characterRange.end>v.text.length)ctx.addIssue({code:'custom',message:'Character range exceeds submitted text',path:['characterRange','end']});
+  if(!isCodePointBoundary(v.text,v.characterRange.start))ctx.addIssue({code:'custom',message:'Character range start splits a surrogate pair',path:['characterRange','start']});
+  if(!isCodePointBoundary(v.text,v.characterRange.end))ctx.addIssue({code:'custom',message:'Character range end splits a surrogate pair',path:['characterRange','end']});
+});
+export type BrowserText=z.infer<typeof BrowserTextSchema>;
