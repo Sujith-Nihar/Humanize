@@ -1,13 +1,15 @@
 import Fastify from 'fastify';
 import { verifyWebhook,normalizeWebhook } from '@humanize/github';
 import { registerAdminRoutes } from './admin.js';
+import { registerExtensionRoutes } from './extension.js';
 import { registerRunnerRoutes } from './runner.js';
 import type { PublicationScheduler,RunnerService,TokenIssuer } from './runner.js';
 import type { AdminOptions } from './admin.js';
+import type { ExtensionReviewPorts } from './extension.js';
 import type { GitHubEvent } from '@humanize/domain';
 
 export interface WebhookSink { ingest(deliveryId:string,event:GitHubEvent):Promise<boolean>; }
-export function createApi(options:{webhookSecret:string;sink:WebhookSink;runners:RunnerService;tokens:TokenIssuer;publication?:PublicationScheduler;admin?:AdminOptions}) {
+export function createApi(options:{webhookSecret:string;sink:WebhookSink;runners:RunnerService;tokens:TokenIssuer;publication?:PublicationScheduler;admin?:AdminOptions;extension?:ExtensionReviewPorts}) {
   const app=Fastify({logger:false,bodyLimit:1024*1024,requestTimeout:30000});
   // Client errors keep their status so a caller does not retry a permanently invalid
   // request, but no error message is ever echoed back.
@@ -19,6 +21,10 @@ export function createApi(options:{webhookSecret:string;sink:WebhookSink;runners
   app.get('/health',async()=>({status:'ok'}));
   registerRunnerRoutes(app,options.runners,options.tokens,options.publication);
   if(options.admin)registerAdminRoutes(app,options.admin);
+  // Opt-in and unwired from apps/api/src/main.ts today, exactly like admin: authentication for
+  // this surface is unresolved (ADR-040), so the route does not exist at all in the deployed
+  // process until an operator explicitly supplies reviewer/verifier ports.
+  if(options.extension)registerExtensionRoutes(app,options.extension);
   void app.register(async hooks=>{
     hooks.removeContentTypeParser('application/json');
     hooks.addContentTypeParser('application/json',{parseAs:'buffer',bodyLimit:25*1024*1024},(_req,body,done)=>done(null,body));
