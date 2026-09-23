@@ -7,8 +7,11 @@
 import { createChromeCredentialStore } from './credentials.js';
 import { reviewSelection } from './controller.js';
 import { originMetadataFromUrl } from './selection.js';
-import { MESSAGES, messageFor, previewOf, viewForOutcome } from './popupState.js';
+import { MESSAGES, actionButtonFor, canStartReview, detailFor, messageFor, previewOf, viewForOutcome } from './popupState.js';
 import type { PopupView } from './popupState.js';
+import { highlightArgsFor, locateAndHighlightInPage } from './highlight.js';
+import type { HighlightPageResult } from './highlight.js';
+import type { BrowserFinding } from './types.js';
 
 // Configured per environment; a real deployment's API origin, never hard-coded here. The
 // bundled default is a local development origin, matching apps/api's own default listen port —
@@ -18,6 +21,14 @@ const API_BASE_URL = typeof HUMANIZE_API_BASE_URL === 'string' ? HUMANIZE_API_BA
 
 const root = document.getElementById('root');
 const credentials = createChromeCredentialStore(chrome.storage.local);
+
+// The full selection this popup was opened with — never truncated. `previewOf` only ever
+// shortens what is *shown*; whatever is actually reviewed always comes from here, so a long
+// selection is never silently swapped for the shorter string the user sees on screen.
+let currentSelectionText = '';
+// Set for the whole span between a review starting and its outcome being rendered, so a second
+// click (or an event that slips through a disabled button) can never start a second request.
+let reviewInFlight = false;
 
 /**
  * Runs a fixed, reviewed function inside the active tab to read the user's current selection.
@@ -37,26 +48,141 @@ async function readSelectionFromActiveTab(): Promise<{ text: string; tabUrl: str
   return { text: injected?.result ?? '', tabUrl: tab.url };
 }
 
+function focusPrimaryControl(): void {
+  const control = root?.querySelector<HTMLButtonElement | HTMLInputElement>('button, input');
+  control?.focus();
+}
+
+function appendActionButton(view: PopupView, onReview: () => void): void {
+  if (!root) return;
+  const action = actionButtonFor(view);
+  if (action.kind === 'none') return;
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.textContent = action.label;
+  button.disabled = action.disabled;
+  if (action.kind === 'review') {
+    // Belt-and-braces alongside `button.disabled`: re-checks the view and in-flight state at
+    // click time, so a second request can never start even if some event slipped past the
+    // button's own disabled state.
+    button.addEventListener('click', () => { if (canStartReview(view, reviewInFlight)) onReview(); });
+  }
+  // A retry re-checks the current selection from scratch, exactly like opening the popup fresh —
+  // the same path that already handles "no selection" vs. "selection present" correctly.
+  if (action.kind === 'retry') button.addEventListener('click', () => { void init(); });
+  root.appendChild(button);
+}
+
+/**
+ * Runs the fixed, reviewed highlight function on demand, in direct response to the user clicking
+ * a finding — never automatically. Any failure (no tab, no selection any more, a mismatched or
+ * out-of-bounds range) is swallowed here into the same safe "couldn't locate" outcome; this must
+ * never throw into the click handler, since a highlighting failure must leave the popup and its
+ * findings exactly as usable as before.
+ */
+async function highlightFinding(finding: BrowserFinding): Promise<HighlightPageResult> {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id) return { ok: false, reason: 'NO_SELECTION' };
+    const [injected] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: locateAndHighlightInPage,
+      args: [highlightArgsFor(finding)],
+    });
+    return injected?.result ?? { ok: false, reason: 'NO_SELECTION' };
+  } catch {
+    return { ok: false, reason: 'NO_SELECTION' };
+  }
+}
+
+function renderFindings(view: Extract<PopupView, { kind: 'findings' }>): void {
+  if (!root) return;
+  const list = document.createElement('div');
+  list.className = 'finding-list';
+
+  const status = document.createElement('p');
+  status.className = 'highlight-status';
+  status.setAttribute('aria-live', 'polite');
+
+  for (const finding of view.findings) {
+    const card = document.createElement('div');
+    card.className = 'finding-card';
+    // Clickable, but never the only way to read a finding — clicking just attempts to locate and
+    // highlight it on the page; the card and its text stay exactly as readable either way.
+    card.setAttribute('role', 'button');
+    card.tabIndex = 0;
+    const activate = () => {
+      status.textContent = '';
+      void highlightFinding(finding).then(result => {
+        status.textContent = result.ok ? '' : MESSAGES.couldNotLocate;
+      });
+    };
+    card.addEventListener('click', activate);
+    card.addEventListener('keydown', event => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      activate();
+    });
+
+    const header = document.createElement('div');
+    header.className = 'finding-header';
+    const category = document.createElement('span');
+    category.className = 'finding-category';
+    category.textContent = finding.category;
+    const severity = document.createElement('span');
+    severity.className = 'finding-severity';
+    severity.dataset.severity = finding.severity;
+    severity.textContent = finding.severity;
+    header.append(category, severity);
+
+    // The quoted text is exactly what the server returned in `exactText` — never re-derived,
+    // truncated or otherwise altered before display.
+    const quote = document.createElement('p');
+    quote.className = 'finding-quote';
+    quote.textContent = `"${finding.exactText}"`;
+
+    const explanation = document.createElement('p');
+    explanation.className = 'finding-explanation';
+    explanation.textContent = finding.explanation;
+
+    card.append(header, quote, explanation);
+    list.appendChild(card);
+  }
+  root.append(list, status);
+  appendActionButton(view, () => {});
+}
+
 function render(view: PopupView): void {
   if (!root) return;
   root.textContent = '';
+  root.className = `state-${view.kind}`;
+
   if (view.kind === 'findings') {
-    for (const finding of view.findings) {
-      const item = document.createElement('div');
-      item.textContent = `[${finding.category} / ${finding.severity}] "${finding.exactText}" — ${finding.explanation}`;
-      root.appendChild(item);
-    }
+    renderFindings(view);
+    focusPrimaryControl();
     return;
   }
-  const message = document.createElement('div');
-  message.textContent = view.kind === 'ready' ? `${MESSAGES.reviewSelectedText}: "${view.preview}"` : messageFor(view);
+
+  const message = document.createElement('p');
+  message.className = 'message';
+  message.textContent = view.kind === 'ready' ? MESSAGES.reviewSelectedText : messageFor(view);
   root.appendChild(message);
-  if (view.kind === 'ready') {
-    const button = document.createElement('button');
-    button.textContent = MESSAGES.reviewButton;
-    button.addEventListener('click', () => { void runReview(view.preview); });
-    root.appendChild(button);
+
+  const detail = detailFor(view);
+  if (detail) {
+    const detailEl = document.createElement('p');
+    detailEl.className = 'message-detail';
+    detailEl.textContent = detail;
+    root.appendChild(detailEl);
   }
+
+  if (view.kind === 'ready') {
+    const preview = document.createElement('p');
+    preview.className = 'preview';
+    preview.textContent = `"${view.preview}"`;
+    root.appendChild(preview);
+  }
+
   if (view.kind === 'auth-required') {
     // Development-only affordance: credential issuance is unresolved (ADR-040), so this is
     // storage only — it never validates, issues, or contacts anything. The value the user
@@ -66,35 +192,54 @@ function render(view: PopupView): void {
     input.type = 'password';
     input.placeholder = 'Development credential';
     const button = document.createElement('button');
+    button.type = 'button';
     button.textContent = 'Save';
     button.addEventListener('click', () => {
       const value = input.value.trim();
       input.value = '';
       if (value) void credentials.setCredential(value).then(init);
     });
-    root.appendChild(input);
-    root.appendChild(button);
+    root.append(input, button);
+    input.focus();
+    return;
+  }
+
+  appendActionButton(view, () => { void runReview(); });
+  focusPrimaryControl();
+}
+
+async function runReview(): Promise<void> {
+  if (reviewInFlight) return;
+  reviewInFlight = true;
+  render({ kind: 'loading' });
+  try {
+    const { tabUrl } = await readSelectionFromActiveTab();
+    const originMetadata = originMetadataFromUrl(tabUrl);
+    const outcome = await reviewSelection({
+      selectedText: currentSelectionText,
+      requestId: crypto.randomUUID(),
+      ...(originMetadata ? { originMetadata } : {}),
+      credentials,
+      baseUrl: API_BASE_URL,
+    });
+    render(viewForOutcome(outcome));
+  } catch {
+    // Any unexpected failure (a rejected chrome.* call, a thrown exception in a dependency) must
+    // still resolve to a safe, actionable view — `loading` can never be the last render.
+    render({ kind: 'invalid-request' });
+  } finally {
+    reviewInFlight = false;
   }
 }
 
-async function runReview(selectedText: string): Promise<void> {
-  render({ kind: 'loading' });
-  const { tabUrl } = await readSelectionFromActiveTab();
-  const originMetadata = originMetadataFromUrl(tabUrl);
-  const outcome = await reviewSelection({
-    selectedText,
-    requestId: crypto.randomUUID(),
-    ...(originMetadata ? { originMetadata } : {}),
-    credentials,
-    baseUrl: API_BASE_URL,
-  });
-  render(viewForOutcome(outcome));
-}
-
 async function init(): Promise<void> {
-  const { text } = await readSelectionFromActiveTab();
-  const trimmed = text.trim();
-  render(trimmed ? { kind: 'ready', preview: previewOf(trimmed) } : { kind: 'empty' });
+  try {
+    const { text } = await readSelectionFromActiveTab();
+    currentSelectionText = text.trim();
+  } catch {
+    currentSelectionText = '';
+  }
+  render(currentSelectionText ? { kind: 'ready', preview: previewOf(currentSelectionText) } : { kind: 'empty' });
 }
 
 void init();

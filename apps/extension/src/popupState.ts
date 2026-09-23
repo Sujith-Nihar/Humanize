@@ -17,12 +17,15 @@ export const MESSAGES = {
   empty: 'Select text on a webpage to review it.',
   reviewSelectedText: 'Review selected text',
   reviewButton: 'Review',
+  retryButton: 'Try again',
   loading: 'Reviewing...',
   noFindings: 'No issues found.',
+  noFindingsDetail: 'This does not guarantee the text is entirely human-written or free of AI involvement — it means no issues matched the current checks.',
   authRequired: 'Authentication required.',
   rateLimited: 'Too many reviews right now. Please try again later.',
-  providerUnavailable: 'Review temporarily unavailable.',
-  invalidRequest: 'Could not review this selection.',
+  providerUnavailable: 'Review temporarily unavailable. Please try again.',
+  invalidRequest: 'Could not review this selection. Please try again.',
+  couldNotLocate: "Couldn't locate this text on the page.",
 } as const;
 
 /** Truncated only for display; never sent anywhere and never logged. */
@@ -62,4 +65,50 @@ export function messageFor(view: PopupView): string {
     case 'invalid-request': return MESSAGES.invalidRequest;
     case 'findings': return '';
   }
+}
+
+/** A secondary, non-alarming line of detail shown under the main message. Empty when a view has
+ * nothing more to add — most views don't need one. */
+export function detailFor(view: PopupView): string {
+  return view.kind === 'no-findings' ? MESSAGES.noFindingsDetail : '';
+}
+
+export type ActionButton =
+  | { kind: 'review'; disabled: boolean; label: string }
+  | { kind: 'retry'; disabled: boolean; label: string }
+  | { kind: 'save'; disabled: boolean; label: string }
+  | { kind: 'none' };
+
+/**
+ * The single source of truth for what the popup's primary button looks like in every state.
+ * Every terminal state (success or failure) gets a `retry` affordance, so the popup can never
+ * leave the user stuck without a way forward; `loading` always disables `review` rather than
+ * hiding it, so a second click can never start a second request while one is in flight.
+ */
+export function actionButtonFor(view: PopupView): ActionButton {
+  switch (view.kind) {
+    case 'empty': return { kind: 'review', disabled: true, label: MESSAGES.reviewButton };
+    case 'ready': return { kind: 'review', disabled: false, label: MESSAGES.reviewButton };
+    case 'loading': return { kind: 'review', disabled: true, label: MESSAGES.reviewButton };
+    case 'findings':
+    case 'no-findings':
+    case 'rate-limited':
+    case 'provider-unavailable':
+    case 'invalid-request':
+      return { kind: 'retry', disabled: false, label: MESSAGES.retryButton };
+    case 'auth-required':
+      return { kind: 'save', disabled: false, label: 'Save' };
+  }
+}
+
+/**
+ * Whether clicking the review action right now should actually start a request. `inFlight` is
+ * true for the whole span between the click that started a review and its outcome being
+ * rendered, so a second click (or a stray keyboard-repeat event) during that span is refused here
+ * even if, for whatever reason, the button's own `disabled` attribute did not stop it first.
+ */
+export function canStartReview(view: PopupView, inFlight: boolean): boolean {
+  if (inFlight) return false;
+  const action = actionButtonFor(view);
+  return action.kind === 'review' && !action.disabled;
 }

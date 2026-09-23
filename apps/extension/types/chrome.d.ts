@@ -19,7 +19,14 @@ declare namespace chrome.tabs {
 
 declare namespace chrome.scripting {
   interface InjectionTarget { tabId: number; }
-  interface ScriptInjection<Result> { target: InjectionTarget; func: () => Result; }
+  // `args` (when present) are structured-cloned into the page and passed as `func`'s own
+  // parameters; `func` itself must be self-contained (see highlight.ts's doc comment) — Chrome
+  // reruns its source standalone in the page, not this closure.
+  interface ScriptInjection<Args extends unknown[], Result> {
+    target: InjectionTarget;
+    func: (...args: Args) => Result;
+    args?: Args;
+  }
   interface InjectionResult<Result> { result: Result; }
-  function executeScript<Result>(injection: ScriptInjection<Result>): Promise<InjectionResult<Result>[]>;
+  function executeScript<Args extends unknown[], Result>(injection: ScriptInjection<Args, Result>): Promise<InjectionResult<Result>[]>;
 }
