@@ -1,5 +1,6 @@
 import { expect,it,vi } from 'vitest';
 import type { ModelProvider } from '@humanize/domain';
+import { OllamaProvider } from '@humanize/providers';
 import { createApi } from './src/app.js';
 import { createDevExtensionAuthenticator,createInMemoryRateLimiter,resolveExtensionPorts } from './src/extension-dev.js';
 
@@ -16,6 +17,20 @@ const runners={register:vi.fn(),heartbeat:vi.fn(),leaseScope:vi.fn(),claim:vi.fn
 it('1/2. resolves no ports at all when no development credential is configured — fails closed',()=>{
   expect(resolveExtensionPorts({},provider({candidates:[],searches:[]}))).toBeUndefined();
   expect(resolveExtensionPorts({model:'llama3.2'},provider({candidates:[],searches:[]}))).toBeUndefined();
+});
+
+it('2. a malformed OLLAMA_BASE_URL cannot affect startup when apps/api/src/main.ts skips constructing it',()=>{
+  // This is the exact hazard the conditional construction in main.ts removes: constructing
+  // OllamaProvider unconditionally on every startup would throw on a bad OLLAMA_BASE_URL even
+  // when the extension development path is disabled, failing the whole control plane for an
+  // unrelated feature. main.ts itself has no real-DB-free unit test, matching every other app's
+  // main.ts in this repository, so this test pins the underlying premise directly: the
+  // constructor genuinely throws on a malformed value, which is exactly why main.ts's
+  // `devCredential ? resolveExtensionPorts(..., new OllamaProvider(...)) : undefined` must never
+  // evaluate the OllamaProvider branch when devCredential is absent.
+  expect(()=>new OllamaProvider('not a valid url',true)).toThrow();
+  // The absent-credential path resolves without ever needing a provider at all.
+  expect(resolveExtensionPorts({},provider({candidates:[],searches:[]}))).toBeUndefined();
 });
 
 it('refuses to start rather than silently honouring a development credential in production',()=>{

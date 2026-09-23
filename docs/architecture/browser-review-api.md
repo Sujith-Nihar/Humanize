@@ -578,3 +578,16 @@ separated as their own task, which is out of scope here.
 - Whether `GET /extension/reviews/:requestId` (or any polling/webhook-callback shape) is ever
   needed, and how it would honor the same ephemeral-by-default privacy rule if the answer isn't
   available synchronously.
+- **The current `apps/api` → `OllamaProvider` wiring (`resolveExtensionPorts`,
+  [`apps/api/src/main.ts`](../../apps/api/src/main.ts)) is a same-machine development
+  convenience, not a production execution architecture.** It exists only so a developer running
+  both `apps/api` and Ollama on one machine can manually test the Chrome extension end to end. A
+  hosted `apps/api` deployment has no network path to a developer's or customer's local Ollama
+  instance, so this wiring would simply fail every request with `PROVIDER_UNAVAILABLE` in a real
+  deployment — it is not a working design for production browser-originated execution, only
+  something that happens not to be reachable there. Where browser-originated model execution
+  should actually happen in production (a cloud call from the control plane, routing through a
+  customer's already-connected runner, or something else) remains an explicit open decision, not
+  something this wiring should be read as having settled. The existing GitHub runner
+  architecture — lease protocol, job-scoped tokens, ephemeral workspaces — is unchanged by any of
+  this and is not a stand-in answer for it.
