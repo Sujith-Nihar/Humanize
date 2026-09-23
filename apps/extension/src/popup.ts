@@ -10,11 +10,14 @@ import { originMetadataFromUrl } from './selection.js';
 import { MESSAGES, messageFor, previewOf, viewForOutcome } from './popupState.js';
 import type { PopupView } from './popupState.js';
 
-// Configured per environment; a real deployment's API origin, never hard-coded here.
+// Configured per environment; a real deployment's API origin, never hard-coded here. The
+// bundled default is a local development origin, matching apps/api's own default listen port —
+// never a production URL.
 declare const HUMANIZE_API_BASE_URL: string | undefined;
 const API_BASE_URL = typeof HUMANIZE_API_BASE_URL === 'string' ? HUMANIZE_API_BASE_URL : 'http://127.0.0.1:3001';
 
 const root = document.getElementById('root');
+const credentials = createChromeCredentialStore(chrome.storage.local);
 
 /**
  * Runs a fixed, reviewed function inside the active tab to read the user's current selection.
@@ -54,6 +57,24 @@ function render(view: PopupView): void {
     button.addEventListener('click', () => { void runReview(view.preview); });
     root.appendChild(button);
   }
+  if (view.kind === 'auth-required') {
+    // Development-only affordance: credential issuance is unresolved (ADR-040), so this is
+    // storage only — it never validates, issues, or contacts anything. The value the user
+    // pastes here must already have been minted some other way (e.g. HUMANIZE_EXTENSION_DEV_
+    // CREDENTIAL configured on a local API instance) and is never logged or displayed back.
+    const input = document.createElement('input');
+    input.type = 'password';
+    input.placeholder = 'Development credential';
+    const button = document.createElement('button');
+    button.textContent = 'Save';
+    button.addEventListener('click', () => {
+      const value = input.value.trim();
+      input.value = '';
+      if (value) void credentials.setCredential(value).then(init);
+    });
+    root.appendChild(input);
+    root.appendChild(button);
+  }
 }
 
 async function runReview(selectedText: string): Promise<void> {
@@ -64,7 +85,7 @@ async function runReview(selectedText: string): Promise<void> {
     selectedText,
     requestId: crypto.randomUUID(),
     ...(originMetadata ? { originMetadata } : {}),
-    credentials: createChromeCredentialStore(chrome.storage.local),
+    credentials,
     baseUrl: API_BASE_URL,
   });
   render(viewForOutcome(outcome));

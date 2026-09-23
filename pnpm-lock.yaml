@@ -68,6 +68,9 @@ importers:
       '@humanize/github':
         specifier: workspace:*
         version: link:../../packages/github
+      '@humanize/providers':
+        specifier: workspace:*
+        version: link:../../packages/providers
       '@humanize/queue':
         specifier: workspace:*
         version: link:../../packages/queue

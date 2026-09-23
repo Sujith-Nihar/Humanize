@@ -5,6 +5,9 @@
  */
 export interface ExtensionCredentialStore {
   getCredential(): Promise<string | null>;
+  /** Stores an already-issued credential the user (or a development fixture) supplies. This is
+   * storage only — it never issues, validates, or contacts anything to obtain the value. */
+  setCredential(credential: string): Promise<void>;
   clearCredential(): Promise<void>;
 }
 
@@ -28,6 +31,9 @@ export function createChromeCredentialStore(storage: StorageArea): ExtensionCred
       const value = stored[STORAGE_KEY];
       return typeof value === 'string' && value.length > 0 ? value : null;
     },
+    async setCredential(credential) {
+      await storage.set({ [STORAGE_KEY]: credential });
+    },
     async clearCredential() {
       await storage.remove([STORAGE_KEY]);
     },
@@ -43,6 +49,7 @@ export function createChromeCredentialStore(storage: StorageArea): ExtensionCred
 export function createDevCredentialStore(devCredential: string | null): ExtensionCredentialStore {
   return {
     async getCredential() { return devCredential; },
+    async setCredential() { /* a fixture constructed with a fixed value is immutable by design */ },
     async clearCredential() { /* a fixed development fixture has nothing to clear */ },
   };
 }

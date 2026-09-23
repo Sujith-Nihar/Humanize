@@ -4,8 +4,8 @@ import type { ExtensionCredentialStore } from './src/credentials.js';
 
 const requestId = '11111111-1111-4111-8111-111111111111';
 const jsonResponse = (status: number, body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status }));
-const noCredential: ExtensionCredentialStore = { getCredential: async () => null, clearCredential: async () => {} };
-const withCredential = (credential: string): ExtensionCredentialStore => ({ getCredential: async () => credential, clearCredential: async () => {} });
+const noCredential: ExtensionCredentialStore = { getCredential: async () => null, setCredential: async () => {}, clearCredential: async () => {} };
+const withCredential = (credential: string): ExtensionCredentialStore => ({ getCredential: async () => credential, setCredential: async () => {}, clearCredential: async () => {} });
 
 describe('reviewSelection', () => {
   it('8. never makes an API request when no credential is present', async () => {

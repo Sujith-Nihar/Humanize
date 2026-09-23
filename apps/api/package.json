@@ -16,6 +16,7 @@
     "@humanize/domain": "workspace:*",
     "@humanize/extractors": "workspace:*",
     "@humanize/github": "workspace:*",
+    "@humanize/providers": "workspace:*",
     "@humanize/queue": "workspace:*",
     "@humanize/review": "workspace:*",
     "@humanize/security": "workspace:*",

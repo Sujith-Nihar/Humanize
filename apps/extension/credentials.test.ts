@@ -31,6 +31,14 @@ describe('createChromeCredentialStore', () => {
       expect(await store.getCredential()).toBeNull();
     }
   });
+
+  it('persists a credential the caller supplies, without validating or issuing it', async () => {
+    const storage = memoryStorage();
+    const store = createChromeCredentialStore(storage);
+    await store.setCredential('a-development-credential');
+    expect(await store.getCredential()).toBe('a-development-credential');
+    expect(storage.set).toHaveBeenCalledWith({ 'humanize.extension.credential': 'a-development-credential' });
+  });
 });
 
 describe('createDevCredentialStore', () => {
