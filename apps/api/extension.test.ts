@@ -1,7 +1,9 @@
 import { expect,it,vi } from 'vitest';
-import { candidateDigest } from '@humanize/domain';
-import type { CandidateFinding,ModelProvider } from '@humanize/domain';
+import { CandidateSchema,candidateDigest } from '@humanize/domain';
+import type { ModelProvider } from '@humanize/domain';
 import { createApi } from './src/app.js';
+import { BrowserCandidateSchema,toCandidateFinding } from './src/extension.js';
+import type { BrowserCandidate } from './src/extension.js';
 
 const requestId='11111111-1111-4111-8111-111111111111';
 const text='Unlock unprecedented potential with our cutting-edge platform for modern teams.';
@@ -11,10 +13,13 @@ const validBody=(overrides:Record<string,unknown>={})=>({
   schemaVersion:'humanize-browsertext-v1',requestId,text,
   characterRange:{start:0,end:text.length},sourceType:'webpage_selection',...overrides,
 });
-const candidate=(overrides:Partial<CandidateFinding>={}):CandidateFinding=>({
+// The shape the browser reviewer itself now returns — nodeId/category/severity/confidence/
+// exactText/explanation only. This is what a mocked reviewer must produce; the route expands it
+// into a full CandidateFinding internally (toCandidateFinding), which is tested separately below.
+const candidate=(overrides:Partial<BrowserCandidate>={}):BrowserCandidate=>({
   nodeId:requestId,category:'ai_like_generic',severity:'minor',confidence:0.95,
   exactText:quote,explanation:'Broad promotional wording with little product-specific information',
-  evidence:[],replacement:null,requiresVerification:true,...overrides,
+  ...overrides,
 });
 const provider=(data:unknown):ModelProvider=>({id:'ollama',testConnection:vi.fn(),
   generateStructured:vi.fn(async()=>({data,provider:'ollama',model:'fixture',durationMs:1}))} as unknown as ModelProvider);
@@ -176,7 +181,7 @@ it('returns a validated finding with a server-derived range and only browser-fac
   const item=candidate();
   const {app}=build(
     provider({candidates:[item],searches:[]}),
-    provider({results:[{candidateId:candidateDigest(item),publish:true,confidence:0.9,correctedExplanation:null,correctedReplacement:'a suggested rewrite that must never leak',reasonIfSuppressed:null}]}),
+    provider({results:[{candidateId:candidateDigest(toCandidateFinding(item)),publish:true,confidence:0.9,correctedExplanation:null,correctedReplacement:'a suggested rewrite that must never leak',reasonIfSuppressed:null}]}),
   );
   try{
     const response=await post(app,validBody());
@@ -208,7 +213,7 @@ it('drops a finding whose quotation is ambiguous in the submitted text rather th
   const item=candidate({exactText:'Our platform is great'});
   const {app}=build(
     provider({candidates:[item],searches:[]}),
-    provider({results:[{candidateId:candidateDigest(item),publish:true,confidence:0.95,correctedExplanation:null,correctedReplacement:null,reasonIfSuppressed:null}]}),
+    provider({results:[{candidateId:candidateDigest(toCandidateFinding(item)),publish:true,confidence:0.95,correctedExplanation:null,correctedReplacement:null,reasonIfSuppressed:null}]}),
   );
   try{
     const response=await post(app,validBody({text:repeated,characterRange:{start:0,end:repeated.length}}));
@@ -235,4 +240,63 @@ it('does not register the route at all when no extension port is supplied',async
     const response=await post(app,validBody());
     expect(response.statusCode).toBe(404);
   }finally{await app.close();}
+});
+
+// --- Minimal browser reviewer schema (toCandidateFinding normalization) ---
+
+it('normalizes a minimal browser candidate into the full CandidateFinding shape, preserving every reviewer-supplied field exactly',()=>{
+  const minimal=candidate({nodeId:'unit-42',category:'clarity',severity:'major',confidence:0.73,exactText:'a specific quote',explanation:'a specific explanation'});
+  expect(toCandidateFinding(minimal)).toEqual({
+    nodeId:'unit-42',category:'clarity',severity:'major',confidence:0.73,
+    exactText:'a specific quote',explanation:'a specific explanation',
+    evidence:[],replacement:null,requiresVerification:false,
+  });
+});
+
+it('never invents evidence or a replacement, and never defaults or overwrites nodeId',()=>{
+  // nodeId deliberately does not match anything meaningful here — normalization must not
+  // "fix" or default it; only validateCandidate (unchanged, downstream) may act on a mismatch.
+  const normalized=toCandidateFinding(candidate({nodeId:'whatever-the-model-said'}));
+  expect(normalized.nodeId).toBe('whatever-the-model-said');
+  expect(normalized.evidence).toEqual([]);
+  expect(normalized.replacement).toBeNull();
+  expect(normalized.requiresVerification).toBe(false);
+});
+
+it('the browser reviewer schema rejects a candidate carrying evidence, replacement or requiresVerification',()=>{
+  const withExtraFields={...candidate(),evidence:[],replacement:null,requiresVerification:false};
+  expect(BrowserCandidateSchema.safeParse(withExtraFields).success).toBe(false);
+});
+
+// --- Existing browser suppression behavior, still enforced through the unchanged validateCandidate ---
+
+it('suppresses a candidate naming a different unit (foreign_node), via the unchanged validateCandidate',async()=>{
+  const {app}=build(provider({candidates:[candidate({nodeId:'not-this-request-id'})],searches:[]}));
+  try{
+    const response=await post(app,validBody());
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({requestId,schemaVersion:'humanize-browsertext-v1',findings:[]});
+  }finally{await app.close();}
+});
+
+it('suppresses a candidate whose category the router never selected for this text',async()=>{
+  // repository_style is never in BROWSER_CATEGORIES, so it can never be routed for browser text.
+  const {app}=build(provider({candidates:[candidate({category:'repository_style'})],searches:[]}));
+  try{
+    const response=await post(app,validBody());
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({requestId,schemaVersion:'humanize-browsertext-v1',findings:[]});
+  }finally{await app.close();}
+});
+
+// --- Schema size ---
+
+it('the browser reviewer schema has strictly fewer candidate fields than the shared CandidateSchema',()=>{
+  const browserFields=Object.keys(BrowserCandidateSchema.shape);
+  const sharedFields=Object.keys(CandidateSchema.shape);
+  expect(browserFields.length).toBeLessThan(sharedFields.length);
+  expect(browserFields).toEqual(['nodeId','category','severity','confidence','exactText','explanation']);
+  // The fields the browser schema deliberately omits are exactly the ones normalization always
+  // fills with a fixed, safe default rather than asking the model for them.
+  for(const omitted of ['evidence','replacement','requiresVerification'])expect(browserFields).not.toContain(omitted);
 });

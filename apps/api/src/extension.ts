@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { BROWSER_TEXT_SCHEMA_VERSION,BrowserTextSchema,CandidateSchema,ReviewerResponseSchema,VerificationSchema,candidateDigest,z } from '@humanize/domain';
+import { BROWSER_TEXT_SCHEMA_VERSION,BrowserTextSchema,CandidateSchema,VerificationSchema,candidateDigest,z } from '@humanize/domain';
 import type { BrowserText,CandidateFinding,EvidenceRecord,ModelProvider } from '@humanize/domain';
 import { DEFAULT_CONFIDENCE,REVIEWER_SYSTEM,VERIFIER_SYSTEM,applyVerification,reviewerInput,validateCandidate,verifierInput } from '@humanize/review';
 import type { CategoryName,ReviewableUnit } from '@humanize/review';
@@ -94,6 +94,47 @@ function locateQuote(text:string,quote:string):{start:number;end:number}|'ambigu
   return text.indexOf(quote,start+1)===-1?{start,end:start+quote.length}:'ambiguous';
 }
 
+/**
+ * The browser reviewer's own response schema — smaller than the shared `ReviewerResponseSchema`
+ * because browser candidates never carry repository evidence, a suggested replacement, or the
+ * unused `requiresVerification` flag (none of those are read anywhere in this route once a
+ * candidate reaches `validateCandidate`/`applyVerification`). Every field reuses the exact
+ * validator `CandidateSchema` already declares — nothing here redefines a domain concept, so
+ * this cannot silently drift from the shared schema's length/enum constraints. `searches` is
+ * dropped too: this route never reads it today, and neither does the GitHub path yet.
+ */
+export const BrowserCandidateSchema=z.object({
+  nodeId:CandidateSchema.shape.nodeId,
+  category:CandidateSchema.shape.category,
+  severity:CandidateSchema.shape.severity,
+  confidence:CandidateSchema.shape.confidence,
+  exactText:CandidateSchema.shape.exactText,
+  explanation:CandidateSchema.shape.explanation,
+}).strict();
+export const BrowserReviewerResponseSchema=z.object({
+  candidates:z.array(BrowserCandidateSchema).max(100),
+}).strict();
+export type BrowserCandidate=z.infer<typeof BrowserCandidateSchema>;
+
+/**
+ * Expands a minimal browser candidate into the full `CandidateFinding` shape
+ * `validateCandidate`/`applyVerification` (packages/review/src/core.ts, unchanged) expect.
+ * `nodeId` is copied exactly as the model returned it — never defaulted or overwritten — because
+ * `validateCandidate`'s `foreign_node` check depends on it genuinely matching `unit.id`, not on
+ * this function assuming agreement. `evidence` is always `[]` (no repository or rule evidence
+ * exists for browser text, and validateCandidate already requires it to be empty here since the
+ * evidence map this route supplies is always empty). `replacement` is always `null` and
+ * `requiresVerification` is always `false`: this route never asks the model for either, and
+ * never reads or invents one — no suggestion is ever generated for a browser finding.
+ */
+export function toCandidateFinding(candidate:BrowserCandidate):CandidateFinding {
+  return {
+    nodeId:candidate.nodeId,category:candidate.category,severity:candidate.severity,
+    confidence:candidate.confidence,exactText:candidate.exactText,explanation:candidate.explanation,
+    evidence:[],replacement:null,requiresVerification:false,
+  };
+}
+
 export function registerExtensionRoutes(app:FastifyInstance,ports:ExtensionReviewPorts):void {
   let inFlight=0;
   app.post('/extension/reviews',{bodyLimit:BODY_LIMIT},async(request,reply)=>{
@@ -143,19 +184,19 @@ async function runReview(browserText:BrowserText,ports:ExtensionReviewPorts,repl
     const marker=`hz-${randomBytes(12).toString('hex')}`;
     const noEvidence=new Map<string,EvidenceRecord>();
 
-    let reviewed:{data:z.infer<typeof ReviewerResponseSchema>};
+    let reviewed:{data:z.infer<typeof BrowserReviewerResponseSchema>};
     try{
       reviewed=await ports.reviewer.generateStructured({
         model:ports.reviewerModel,system:REVIEWER_SYSTEM,
         input:reviewerInput({unit,categories:BROWSER_CATEGORIES,evidence:[],ruleNotes:[],marker}),
-        schema:ReviewerResponseSchema,timeoutMs:MODEL_TIMEOUT_MS,traceContext:{traceId:browserText.requestId},
+        schema:BrowserReviewerResponseSchema,timeoutMs:MODEL_TIMEOUT_MS,traceContext:{traceId:browserText.requestId},
       });
     }catch{return reply.code(503).send({error:'PROVIDER_UNAVAILABLE'});}
 
     try{
       const accepted:CandidateFinding[]=[];
       for(const raw of reviewed.data.candidates){
-        const candidate=CandidateSchema.parse(raw);
+        const candidate=toCandidateFinding(BrowserCandidateSchema.parse(raw));
         if(validateCandidate(candidate,unit,BROWSER_CATEGORIES,noEvidence))continue;
         if(candidate.confidence<DEFAULT_CONFIDENCE||candidate.severity==='nit')continue;
         accepted.push(candidate);
