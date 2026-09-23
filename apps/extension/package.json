@@ -1,0 +1,13 @@
+{
+  "name": "@humanize/extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Findings-only browser extension MVP: reviews explicitly selected text through POST /extension/reviews. Not wired into any production API deployment.",
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@humanize/domain": "workspace:*"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "Humanize Review (MVP)",
+  "version": "0.1.0",
+  "description": "Reviews text you explicitly select for generic or unclear writing. Findings only; nothing is changed automatically.",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Review selected text"
+  },
+  "permissions": ["activeTab", "scripting", "storage"],
+  "minimum_chrome_version": "111"
+}
