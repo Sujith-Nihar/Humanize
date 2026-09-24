@@ -7,9 +7,12 @@
 import { createChromeCredentialStore } from './credentials.js';
 import { reviewSelection } from './controller.js';
 import { originMetadataFromUrl } from './selection.js';
-import { MESSAGES, actionButtonFor, canStartReview, detailFor, messageFor, previewOf, viewForOutcome } from './popupState.js';
+import {
+  LOADING_CHECKS, MESSAGES, actionButtonFor, canGoToNextFinding, canGoToPreviousFinding,
+  canStartReview, copyFor, nextFindingIndex, previewOf, previousFindingIndex, resultsSummary, viewForOutcome,
+} from './popupState.js';
 import type { PopupView } from './popupState.js';
-import { highlightArgsFor, locateAndHighlightInPage } from './highlight.js';
+import { clearHighlightInPage, highlightArgsFor, locateAndHighlightInPage } from './highlight.js';
 import type { HighlightPageResult } from './highlight.js';
 import type { BrowserFinding } from './types.js';
 
@@ -30,6 +33,18 @@ let currentSelectionText = '';
 // click (or an event that slips through a disabled button) can never start a second request.
 let reviewInFlight = false;
 
+// Finding-navigation state. `activeFindingIndex` is `null` until the user explicitly clicks a
+// card or a nav arrow — nothing on the page is ever highlighted before that first interaction.
+let currentFindings: BrowserFinding[] = [];
+let activeFindingIndex: number | null = null;
+let cardElements: HTMLElement[] = [];
+let statusEl: HTMLParagraphElement | null = null;
+let syncNav: (() => void) | null = null;
+
+function prefersReducedMotion(): boolean {
+  return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
 /**
  * Runs a fixed, reviewed function inside the active tab to read the user's current selection.
  * This is the "browser selection API approach": the function is constant and this file's own
@@ -48,8 +63,12 @@ async function readSelectionFromActiveTab(): Promise<{ text: string; tabUrl: str
   return { text: injected?.result ?? '', tabUrl: tab.url };
 }
 
+function setHeaderLoading(isLoading: boolean): void {
+  document.getElementById('brand-status')?.classList.toggle('is-loading', isLoading);
+}
+
 function focusPrimaryControl(): void {
-  const control = root?.querySelector<HTMLButtonElement | HTMLInputElement>('button, input');
+  const control = root?.querySelector<HTMLElement>('button:not([disabled]), input, [role="button"]');
   control?.focus();
 }
 
@@ -59,6 +78,7 @@ function appendActionButton(view: PopupView, onReview: () => void): void {
   if (action.kind === 'none') return;
   const button = document.createElement('button');
   button.type = 'button';
+  button.className = 'btn-primary';
   button.textContent = action.label;
   button.disabled = action.disabled;
   if (action.kind === 'review') {
@@ -95,67 +115,224 @@ async function highlightFinding(finding: BrowserFinding): Promise<HighlightPageR
   }
 }
 
+/** Removes any page highlight without creating a new one — used whenever a finding is
+ * deactivated or a new review is about to start, so a stale highlight never lingers. */
+async function clearHighlight(): Promise<void> {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id) return;
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: clearHighlightInPage });
+  } catch { /* best-effort */ }
+}
+
+/**
+ * The single place that changes which finding is "active" — used by both a direct card click and
+ * the prev/next nav arrows, so highlighting and card/nav visuals can never drift out of sync with
+ * each other. Reuses `highlightFinding`/`clearHighlight` rather than any second highlighting path.
+ */
+function activateFinding(index: number | null): void {
+  activeFindingIndex = index;
+  cardElements.forEach((card, i) => {
+    const isActive = i === index;
+    card.classList.toggle('active', isActive);
+    card.setAttribute('aria-current', isActive ? 'true' : 'false');
+    const hint = card.querySelector<HTMLElement>('.finding-hint');
+    if (hint) hint.textContent = isActive ? MESSAGES.shownOnPage : MESSAGES.viewOnPage;
+  });
+  syncNav?.();
+  if (statusEl) statusEl.textContent = '';
+
+  if (index === null) {
+    void clearHighlight();
+    return;
+  }
+  const finding = currentFindings[index];
+  if (!finding) return;
+  void highlightFinding(finding).then(result => {
+    if (statusEl && !result.ok) statusEl.textContent = MESSAGES.couldNotLocate;
+  });
+}
+
+function buildNav(total: number): HTMLElement {
+  const nav = document.createElement('div');
+  nav.className = 'finding-nav';
+
+  const prev = document.createElement('button');
+  prev.type = 'button';
+  prev.className = 'nav-arrow';
+  prev.setAttribute('aria-label', MESSAGES.previousFinding);
+  prev.textContent = '←';
+
+  const position = document.createElement('span');
+  position.className = 'nav-position';
+  position.setAttribute('aria-live', 'polite');
+
+  const next = document.createElement('button');
+  next.type = 'button';
+  next.className = 'nav-arrow';
+  next.setAttribute('aria-label', MESSAGES.nextFinding);
+  next.textContent = '→';
+
+  const sync = () => {
+    prev.disabled = !canGoToPreviousFinding(activeFindingIndex);
+    next.disabled = !canGoToNextFinding(activeFindingIndex, total);
+    position.textContent = `${(activeFindingIndex ?? 0) + 1} of ${total}`;
+  };
+  prev.addEventListener('click', () => activateFinding(previousFindingIndex(activeFindingIndex, total)));
+  next.addEventListener('click', () => activateFinding(nextFindingIndex(activeFindingIndex, total)));
+
+  syncNav = sync;
+  sync();
+  nav.append(prev, position, next);
+  return nav;
+}
+
+function buildFindingCard(finding: BrowserFinding, index: number): HTMLElement {
+  const card = document.createElement('div');
+  card.className = 'finding-card';
+  card.tabIndex = 0;
+  card.setAttribute('role', 'button');
+  card.setAttribute('aria-current', 'false');
+  card.setAttribute('aria-label', `${finding.category.replace(/_/g, ' ')}, ${finding.severity} severity: "${finding.exactText}"`);
+  if (!prefersReducedMotion()) card.style.animationDelay = `${Math.min(index, 6) * 50}ms`;
+
+  const header = document.createElement('div');
+  header.className = 'finding-header';
+  const category = document.createElement('span');
+  category.className = 'finding-category';
+  category.textContent = finding.category.replace(/_/g, ' ');
+  const severity = document.createElement('span');
+  severity.className = 'finding-severity';
+  severity.dataset.severity = finding.severity;
+  severity.textContent = finding.severity;
+  header.append(category, severity);
+
+  // The quoted text is exactly what the server returned in `exactText` — never re-derived,
+  // truncated or otherwise altered before display.
+  const quote = document.createElement('p');
+  quote.className = 'finding-quote';
+  quote.textContent = `"${finding.exactText}"`;
+
+  const explanation = document.createElement('p');
+  explanation.className = 'finding-explanation';
+  explanation.textContent = finding.explanation;
+
+  const hint = document.createElement('span');
+  hint.className = 'finding-hint';
+  hint.setAttribute('aria-hidden', 'true');
+  hint.textContent = MESSAGES.viewOnPage;
+
+  card.append(header, quote, explanation, hint);
+
+  const activate = () => activateFinding(index);
+  card.addEventListener('click', activate);
+  card.addEventListener('keydown', event => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    activate();
+  });
+
+  return card;
+}
+
 function renderFindings(view: Extract<PopupView, { kind: 'findings' }>): void {
   if (!root) return;
+  currentFindings = view.findings;
+  activeFindingIndex = null;
+  cardElements = [];
+  syncNav = null;
+
+  const header = document.createElement('div');
+  header.className = 'results-header';
+  const title = document.createElement('p');
+  title.className = 'results-title';
+  title.textContent = 'Review complete';
+  const count = document.createElement('p');
+  count.className = 'results-count';
+  count.textContent = resultsSummary(view.findings.length);
+  header.append(title, count);
+  root.appendChild(header);
+
+  if (view.findings.length > 1) root.appendChild(buildNav(view.findings.length));
+
   const list = document.createElement('div');
   list.className = 'finding-list';
+  cardElements = view.findings.map((finding, index) => buildFindingCard(finding, index));
+  list.append(...cardElements);
+  root.appendChild(list);
 
-  const status = document.createElement('p');
-  status.className = 'highlight-status';
-  status.setAttribute('aria-live', 'polite');
+  statusEl = document.createElement('p');
+  statusEl.className = 'highlight-status';
+  statusEl.setAttribute('aria-live', 'polite');
+  root.appendChild(statusEl);
 
-  for (const finding of view.findings) {
-    const card = document.createElement('div');
-    card.className = 'finding-card';
-    // Clickable, but never the only way to read a finding — clicking just attempts to locate and
-    // highlight it on the page; the card and its text stay exactly as readable either way.
-    card.setAttribute('role', 'button');
-    card.tabIndex = 0;
-    const activate = () => {
-      status.textContent = '';
-      void highlightFinding(finding).then(result => {
-        status.textContent = result.ok ? '' : MESSAGES.couldNotLocate;
-      });
-    };
-    card.addEventListener('click', activate);
-    card.addEventListener('keydown', event => {
-      if (event.key !== 'Enter' && event.key !== ' ') return;
-      event.preventDefault();
-      activate();
-    });
-
-    const header = document.createElement('div');
-    header.className = 'finding-header';
-    const category = document.createElement('span');
-    category.className = 'finding-category';
-    category.textContent = finding.category;
-    const severity = document.createElement('span');
-    severity.className = 'finding-severity';
-    severity.dataset.severity = finding.severity;
-    severity.textContent = finding.severity;
-    header.append(category, severity);
-
-    // The quoted text is exactly what the server returned in `exactText` — never re-derived,
-    // truncated or otherwise altered before display.
-    const quote = document.createElement('p');
-    quote.className = 'finding-quote';
-    quote.textContent = `"${finding.exactText}"`;
-
-    const explanation = document.createElement('p');
-    explanation.className = 'finding-explanation';
-    explanation.textContent = finding.explanation;
-
-    card.append(header, quote, explanation);
-    list.appendChild(card);
-  }
-  root.append(list, status);
   appendActionButton(view, () => {});
+}
+
+function renderReady(view: Extract<PopupView, { kind: 'ready' }>): void {
+  if (!root) return;
+  const card = document.createElement('div');
+  card.className = 'selection-card';
+  const label = document.createElement('p');
+  label.className = 'selection-label';
+  label.textContent = 'Review this text';
+  const quote = document.createElement('p');
+  quote.className = 'selection-quote';
+  quote.textContent = `"${view.preview}"`;
+  const count = currentSelectionText.length;
+  const meta = document.createElement('p');
+  meta.className = 'selection-meta';
+  meta.textContent = `${count} character${count === 1 ? '' : 's'} selected`;
+  card.append(label, quote, meta);
+  root.appendChild(card);
+}
+
+function renderLoading(): void {
+  if (!root) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'loading';
+  const title = document.createElement('p');
+  title.className = 'loading-title';
+  title.textContent = MESSAGES.loadingTitle;
+  const list = document.createElement('ul');
+  list.className = 'loading-checks';
+  for (const [index, label] of LOADING_CHECKS.entries()) {
+    const item = document.createElement('li');
+    item.style.setProperty('--i', String(index));
+    item.textContent = label;
+    list.appendChild(item);
+  }
+  wrap.append(title, list);
+  root.appendChild(wrap);
+}
+
+function renderStatus(view: PopupView): void {
+  if (!root) return;
+  const copy = copyFor(view);
+  if (!copy) return;
+  const wrap = document.createElement('div');
+  wrap.className = `status status-${view.kind}`;
+  if (view.kind === 'no-findings' || view.kind === 'auth-required' || view.kind === 'rate-limited' || view.kind === 'provider-unavailable' || view.kind === 'invalid-request') {
+    const icon = document.createElement('div');
+    icon.className = 'status-icon';
+    icon.setAttribute('aria-hidden', 'true');
+    wrap.appendChild(icon);
+  }
+  const title = document.createElement('p');
+  title.className = 'status-title';
+  title.textContent = copy.title;
+  const detail = document.createElement('p');
+  detail.className = 'status-detail';
+  detail.textContent = copy.detail;
+  wrap.append(title, detail);
+  root.appendChild(wrap);
 }
 
 function render(view: PopupView): void {
   if (!root) return;
   root.textContent = '';
   root.className = `state-${view.kind}`;
+  setHeaderLoading(view.kind === 'loading');
 
   if (view.kind === 'findings') {
     renderFindings(view);
@@ -163,43 +340,46 @@ function render(view: PopupView): void {
     return;
   }
 
-  const message = document.createElement('p');
-  message.className = 'message';
-  message.textContent = view.kind === 'ready' ? MESSAGES.reviewSelectedText : messageFor(view);
-  root.appendChild(message);
-
-  const detail = detailFor(view);
-  if (detail) {
-    const detailEl = document.createElement('p');
-    detailEl.className = 'message-detail';
-    detailEl.textContent = detail;
-    root.appendChild(detailEl);
-  }
-
   if (view.kind === 'ready') {
-    const preview = document.createElement('p');
-    preview.className = 'preview';
-    preview.textContent = `"${view.preview}"`;
-    root.appendChild(preview);
+    renderReady(view);
+    appendActionButton(view, () => { void runReview(); });
+    focusPrimaryControl();
+    return;
   }
+
+  if (view.kind === 'loading') {
+    renderLoading();
+    appendActionButton(view, () => {});
+    return;
+  }
+
+  renderStatus(view);
 
   if (view.kind === 'auth-required') {
     // Development-only affordance: credential issuance is unresolved (ADR-040), so this is
     // storage only — it never validates, issues, or contacts anything. The value the user
     // pastes here must already have been minted some other way (e.g. HUMANIZE_EXTENSION_DEV_
     // CREDENTIAL configured on a local API instance) and is never logged or displayed back.
+    const form = document.createElement('div');
+    form.className = 'auth-form';
     const input = document.createElement('input');
     input.type = 'password';
-    input.placeholder = 'Development credential';
+    input.placeholder = 'Access key';
+    input.setAttribute('aria-label', 'Humanize access key');
     const button = document.createElement('button');
     button.type = 'button';
-    button.textContent = 'Save';
+    button.className = 'btn-primary';
+    button.textContent = MESSAGES.connectButton;
     button.addEventListener('click', () => {
       const value = input.value.trim();
       input.value = '';
       if (value) void credentials.setCredential(value).then(init);
     });
-    root.append(input, button);
+    form.append(input, button);
+    const privacy = document.createElement('p');
+    privacy.className = 'auth-privacy';
+    privacy.textContent = 'Stored only on this device. Never shared with the page you’re reviewing.';
+    root.append(form, privacy);
     input.focus();
     return;
   }
@@ -211,6 +391,9 @@ function render(view: PopupView): void {
 async function runReview(): Promise<void> {
   if (reviewInFlight) return;
   reviewInFlight = true;
+  currentFindings = [];
+  activeFindingIndex = null;
+  void clearHighlight();
   render({ kind: 'loading' });
   try {
     const { tabUrl } = await readSelectionFromActiveTab();
@@ -233,6 +416,7 @@ async function runReview(): Promise<void> {
 }
 
 async function init(): Promise<void> {
+  void clearHighlight();
   try {
     const { text } = await readSelectionFromActiveTab();
     currentSelectionText = text.trim();

@@ -6,9 +6,10 @@
 import type { BrowserFinding } from './types.js';
 
 export type HighlightFailureReason =
-  | 'NO_SELECTION'   // the page has no active selection any more (or it collapsed to nothing)
-  | 'TEXT_CHANGED'   // the live selection's text no longer matches what was actually reviewed
-  | 'OUT_OF_BOUNDS';  // the finding's range doesn't fit inside the (still-matching) selection text
+  | 'NO_SELECTION'    // the page has no active selection any more (or it collapsed to nothing)
+  | 'TEXT_CHANGED'    // the live selection's text no longer matches what was actually reviewed
+  | 'OUT_OF_BOUNDS'   // the finding's range doesn't fit inside the (still-matching) selection text
+  | 'UNSUPPORTED';    // this page's browser has no CSS Custom Highlight API (unexpected given the manifest's minimum Chrome version, but never assumed)
 
 export type HighlightPageResult = { ok: true } | { ok: false; reason: HighlightFailureReason };
 
@@ -176,23 +177,51 @@ export function locateAndHighlightInPage(args: LocateAndHighlightArgs): Highligh
   const located = locatePositions(spans, start, end);
   if (!located) return { ok: false, reason: 'OUT_OF_BOUNDS' };
 
+  // The CSS Custom Highlight API (Chrome 105+, well below this extension's own minimum_chrome_
+  // version) paints a highlight purely as a rendering effect — it never touches the DOM tree, so
+  // (unlike wrapping the range in an element) it can never split, move, or merge the very text
+  // nodes the live selection's own boundaries point into. An earlier wrapping-based
+  // implementation was found, via manual testing, to do exactly that: each highlight subtly
+  // shifted the browser's live selection, corrupting later clicks on other findings. This has no
+  // such side effect, and needs no fallback given the manifest's declared minimum version.
+  const highlightApi = (window as unknown as { Highlight?: new (...ranges: unknown[]) => unknown; CSS?: { highlights?: Map<string, unknown> } });
+  if (typeof highlightApi.Highlight !== 'function' || !highlightApi.CSS?.highlights) return { ok: false, reason: 'UNSUPPORTED' };
+
   const highlightRange = document.createRange();
   highlightRange.setStart(located.startNode as Node, located.startOffset);
   highlightRange.setEnd(located.endNode as Node, located.endOffset);
 
-  const mark = document.createElement('mark');
-  mark.className = 'humanize-highlight';
-  mark.style.backgroundColor = '#ffe066';
-  mark.style.color = 'inherit';
-  // extractContents works whether the range sits inside one text node or crosses several sibling
-  // elements (unlike the alternative single-parent-only wrapping API); it only ever moves the
-  // already-selected text nodes into the wrapper, never edits their content.
-  const fragment = highlightRange.extractContents();
-  mark.appendChild(fragment);
-  highlightRange.insertNode(mark);
-  mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  const STYLE_ID = '__humanize-highlight-style__';
+  if (!document.getElementById(STYLE_ID)) {
+    const style = document.createElement('style');
+    style.id = STYLE_ID;
+    style.textContent = '::highlight(humanize-highlight) { background-color: #ffe066; }';
+    document.head.appendChild(style);
+  }
 
-  win[CLEANUP_KEY] = () => { mark.replaceWith(...Array.from(mark.childNodes)); };
+  highlightApi.CSS.highlights.set('humanize-highlight', new highlightApi.Highlight(highlightRange));
+  win[CLEANUP_KEY] = () => { highlightApi.CSS?.highlights?.delete('humanize-highlight'); };
 
+  const reduceMotion = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const container = (located.startNode as { parentElement?: Element | null }).parentElement;
+  container?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'center' });
+
+  return { ok: true };
+}
+
+/**
+ * Removes any highlight left by a previous `locateAndHighlightInPage` call, without creating a
+ * new one — used when a new review starts or a finding is deactivated, so a stale highlight from
+ * an earlier result never lingers on the page. Self-contained for the same reason as its
+ * counterpart above: it is passed directly to `chrome.scripting.executeScript`.
+ */
+export function clearHighlightInPage(): { ok: true } {
+  const CLEANUP_KEY = '__humanizeHighlightCleanup__';
+  const win = window as unknown as Record<string, unknown>;
+  const cleanup = win[CLEANUP_KEY];
+  if (typeof cleanup === 'function') {
+    try { (cleanup as () => void)(); } catch { /* best-effort removal */ }
+  }
+  win[CLEANUP_KEY] = undefined;
   return { ok: true };
 }

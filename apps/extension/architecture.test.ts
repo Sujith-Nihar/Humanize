@@ -13,31 +13,32 @@ const sources = sourceFiles.map(name => readFileSync(join(SRC_DIR, name), 'utf8'
  * script-injecting APIs that a rewrite would require appear anywhere in the source at all.
  */
 describe('no automatic rewriting or replacement', () => {
-  // `insertNode`/`replaceWith` are the one deliberate exception: highlight.ts uses them to wrap
-  // and later unwrap a temporary, click-triggered highlight around text that already exists on
-  // the page — never to edit, delete, or replace that text. Every other file, and every other
-  // API that would let a rewrite happen (content injection, arbitrary script execution, editing
-  // the page directly), stays fully banned everywhere, including in highlight.ts itself.
-  const alwaysForbidden = ['execCommand', 'deleteContents', 'contentEditable', 'document.write', 'innerHTML', 'setRangeText', 'surroundContents'];
-  const forbiddenOutsideHighlight = ['insertNode', 'replaceWith'];
+  // Painting the highlight via the CSS Custom Highlight API (see highlight.ts) means none of
+  // these DOM-mutation/content-injection primitives are needed anywhere in this extension at
+  // all — the highlight is a pure rendering effect, never a node the page's own tree gains,
+  // loses, or has split. An earlier implementation used `insertNode`/`replaceWith` to wrap and
+  // unwrap the highlighted text; that approach was replaced after manual testing showed it could
+  // subtly shift the page's live selection on repeated highlights (see highlight.ts's comment).
+  const forbidden = [
+    'execCommand', 'insertNode', 'deleteContents', 'contentEditable', 'document.write',
+    'innerHTML', 'setRangeText', 'replaceWith', 'surroundContents', 'extractContents',
+  ];
 
   it('16. contains no DOM-mutation or content-replacement call anywhere in the extension source', () => {
     for (const [index, source] of sources.entries()) {
-      for (const pattern of alwaysForbidden) {
-        expect(source, `${sourceFiles[index]} must not use ${pattern}`).not.toContain(pattern);
-      }
-      if (sourceFiles[index] === 'highlight.ts') continue;
-      for (const pattern of forbiddenOutsideHighlight) {
+      for (const pattern of forbidden) {
         expect(source, `${sourceFiles[index]} must not use ${pattern}`).not.toContain(pattern);
       }
     }
   });
 
-  it('highlight.ts only ever wraps/unwraps a highlight — it never sets node content directly', () => {
+  it('highlight.ts only ever registers/clears a CSS highlight — it never sets an existing text node\'s content', () => {
     const highlight = sources[sourceFiles.indexOf('highlight.ts')]!;
     expect(highlight).not.toContain('.nodeValue =');
-    expect(highlight).not.toContain('.textContent =');
     expect(highlight).not.toContain('.data =');
+    // The one exception: `style.textContent = ...` sets the CSS rule text of a `<style>` element
+    // this function creates itself — never the text of a node already on the page.
+    expect(highlight.match(/\w+\.textContent\s*=/g)).toEqual(['style.textContent =']);
   });
 
   it('the response types carry no replacement/suggestion field to apply', () => {
@@ -46,14 +47,15 @@ describe('no automatic rewriting or replacement', () => {
     expect(types).not.toContain('suggestion');
   });
 
-  it('every script executed in a page is one of exactly two fixed, reviewed functions — nothing page-supplied', () => {
+  it('every script executed in a page is one of exactly three fixed, reviewed functions — nothing page-supplied', () => {
     const popup = sources[sourceFiles.indexOf('popup.ts')]!;
-    // executeScript is called exactly twice: once with a literal, hard-coded selection reader,
-    // and once with the imported, reviewed highlight function — never a string, never a value
+    // executeScript is called exactly three times: a literal, hard-coded selection reader, and
+    // the imported, reviewed highlight/clear-highlight functions — never a string, never a value
     // derived from the page or from user input.
-    expect(popup.match(/executeScript/g)?.length).toBe(2);
+    expect(popup.match(/executeScript/g)?.length).toBe(3);
     expect(popup).toContain('func: () => window.getSelection()');
     expect(popup).toContain('func: locateAndHighlightInPage');
+    expect(popup).toContain('func: clearHighlightInPage');
   });
 
   it('submits the full original selection, never the truncated on-screen preview', () => {

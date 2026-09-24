@@ -7,7 +7,16 @@
     <link rel="stylesheet" href="./popup.css" />
   </head>
   <body>
-    <div id="root">Loading…</div>
+    <div class="app">
+      <header class="brand">
+        <span class="brand-mark" id="brand-status" aria-hidden="true"></span>
+        <span class="brand-text">
+          <span class="brand-name">Humanize</span>
+          <span class="brand-tagline">Make your writing sound like you.</span>
+        </span>
+      </header>
+      <main id="root" aria-live="polite">Loading…</main>
+    </div>
     <!--
       Loads compiled output, not this app's TypeScript sources directly. This MVP does not
       set up a bundler; running `pnpm --filter @humanize/extension build` (or an equivalent
