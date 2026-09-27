@@ -1,8 +1,49 @@
 # Agent handoff
 
-**Resuming? Start with [plan-production-review.md](plan-production-review.md).** It holds the agreed
-next seven stages, the decisions already taken and the measurement that would show each stage
-failed. Stage 1 (batching model calls) is the next piece of work and nothing has begun on it.
+**Resuming? Start with [plan-production-review.md](plan-production-review.md).** Stage 1 (batching
+model calls) is **implemented and unit-tested but its live acceptance is not yet measured**; that
+measurement is the next action. Stages 2 to 7 have not begun.
+
+## Session of 2026-09-27: stage 1, batched model calls
+
+**Where it stopped.** `pnpm check` exits 0 (375 tests, 47 files). The live measurement
+[`evals/review/batch.live.test.ts`](../../evals/review/batch.live.test.ts) was started against
+`llama3.2` and had not finished when the session was saved, so **no timing is claimed**. Resume with:
+
+```sh
+HUMANIZE_BATCH_BASELINE=1 HUMANIZE_OLLAMA_BASE_URL=http://127.0.0.1:11434 HUMANIZE_OLLAMA_MODEL=llama3.2 \
+  pnpm exec vitest run --config vitest.live.config.ts evals/review/batch.live.test.ts
+```
+
+It reviews 12 gold nodes in one `reviewNodes` call and asserts under 120 s. The baseline flag also
+reviews them one call per node, which is exactly the pre-batching behaviour because the
+single-unit prompts are byte-identical, so `foreign_node` counts and wall-clock compare directly.
+Record the numbers against P1-S08-T04.
+
+**What changed.** [`pipeline.ts`](../../packages/review/src/pipeline.ts) prepares every node, then
+sends up to `LIMITS.nodeBatch` routed nodes per reviewer call, packed so the rendered batch stays
+inside `LIMITS.contextTokens` (Ollama's window is sized to the budget and would otherwise evict the
+system prompt). Only nodes with surviving candidates reach the verifier, also batched. A candidate
+is validated against the unit it names; a wrong or absent id is suppressed, never reassigned. A
+failed multi-node call falls back to one call per node (`MODEL_BATCH_FALLBACK`), so a node that
+defeats the model still costs only itself. The runner now forwards pipeline diagnostics
+(`REVIEWER_CALLS`, `VERIFIER_CALLS`, and the `CORRECTION_*` counts it previously dropped).
+
+**Open risks to watch in the live run.** A batch generates more output against the same
+`LIMITS.outputTokens`; `CONTEXT_LIMIT` there triggers the fallback and would show as
+`MODEL_BATCH_FALLBACK`. Per-call timeout scales with batch size but the Ollama adapter caps it at
+180 s. The runner still reviews at most 20 changed nodes per pull request
+(`.slice(0, LIMITS.nodeBatch)` in `apps/runner/src/executor.ts`); batching makes lifting that
+possible but it has not been changed.
+
+**Merged from origin this session: browser extension work (ldhar, 12 commits).** `apps/extension`,
+an opt-in `/extension/reviews` route, `BrowserTextSchema`, and `packages/review/src/core.ts`
+(source-agnostic validation shared by both paths). Two things are unresolved and left to the
+owners: **[ADR-040](../adr/ADR-040.md) is scoped to "investigation and design only" and says it
+does not approve extension code, a new API surface or changes to `apps/api`, `packages/domain` or
+`packages/review`, yet the following commits implement exactly those**; and none of that work is
+recorded in STATUS, the manifest or the progress log. The user asked to focus on the GitHub App,
+so the extension was not touched; its single-unit prompt builders are preserved byte for byte.
 
 Read [STATUS.md](STATUS.md), [AGENTS.md](../../AGENTS.md), and the assigned task before editing. Task records and the manifest track implementation and remaining acceptance. The append-only [progress log](evidence/progress.jsonl) preserves earlier checkpoints; newer evidence supersedes earlier failures.
 
