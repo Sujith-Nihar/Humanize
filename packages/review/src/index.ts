@@ -1,7 +1,8 @@
 export { routeNode } from './router.js';
 export type { CategoryName,RoutingDecision,RoutingOptions } from './router.js';
-export { REVIEWER_SYSTEM,VERIFIER_SYSTEM,fence,reviewerInput,verifierInput } from './prompt.js';
-export { reviewNodes,authorFacing,DEFAULT_CONFIDENCE } from './pipeline.js';
+export { REVIEWER_SYSTEM,VERIFIER_SYSTEM,fence,reviewerBatchInput,reviewerInput,verifierBatchInput,verifierInput } from './prompt.js';
+export type { ReviewerUnitInput,VerifierUnitInput } from './prompt.js';
+export { reviewNodes,authorFacing,packBatches,DEFAULT_CONFIDENCE } from './pipeline.js';
 export type { NodeFailure,NodeSignal,ReviewOptions,ReviewOutcome,ReviewPorts,SuppressedCandidate,SuppressionReason } from './pipeline.js';
 // Source-agnostic pieces of the common review core (extracted for BrowserText reuse, ADR-040).
 // Unchanged content, only now reachable from outside this package.

@@ -95,6 +95,9 @@ export async function executeReview(
       rules:node=>evaluateRules(node,config.rules??{}) as NodeSignal[],
     },{enabled:config.enabled,...(config.minimumSeverity?{minimumSeverity:config.minimumSeverity}:{}),...(signal?{signal}:{})});
 
+    // Pipeline diagnostics (model call counts, batch fallbacks, discarded corrections) travel
+    // with the result so a run records what the review actually cost.
+    for(const diagnostic of outcome.diagnostics)diagnostics.set(diagnostic.code,(diagnostics.get(diagnostic.code)??0)+diagnostic.count);
     for(const suppressed of outcome.suppressed)diagnostics.set(`SUPPRESSED_${suppressed.reason.toUpperCase()}`,(diagnostics.get(`SUPPRESSED_${suppressed.reason.toUpperCase()}`)??0)+1);
     for(const failure of outcome.failures)diagnostics.set(`REVIEW_FAILED_${failure.errorClass.replace(/[^A-Z_]/gi,'_').toUpperCase()}`.slice(0,100),(diagnostics.get(`REVIEW_FAILED_${failure.errorClass.replace(/[^A-Z_]/gi,'_').toUpperCase()}`.slice(0,100))??0)+1);
     const evidence=new Map(outcome.findings.flatMap(finding=>finding.evidenceRecords.map(record=>[record.id,record])));

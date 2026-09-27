@@ -40,18 +40,12 @@ function renderEvidence(evidence:readonly EvidenceRecord[],marker:string):string
   }).join('\n\n');
 }
 
-/**
- * `contextLabel` carries whatever caller-specific framing line belongs after the nodeId
- * statement (the GitHub path renders its content kind and file path into it); it is optional and
- * omitted entirely when absent, so this function itself asserts nothing about where a
- * ReviewableUnit's text came from.
- */
-export function reviewerInput(input:{unit:ReviewableUnit;contextLabel?:string;categories:readonly CategoryName[];evidence:readonly EvidenceRecord[];ruleNotes:readonly string[];marker:string}):string {
-  const {unit,marker}=input;
+export interface ReviewerUnitInput { unit:ReviewableUnit; contextLabel?:string; categories:readonly CategoryName[]; evidence:readonly EvidenceRecord[]; ruleNotes:readonly string[]; }
+export interface VerifierUnitInput { unit:ReviewableUnit; candidates:readonly {id:string;category:string;severity:string;exactText:string;explanation:string}[]; evidence:readonly EvidenceRecord[]; }
+
+function reviewerSection(input:ReviewerUnitInput,marker:string):string[] {
+  const {unit}=input;
   return [
-    // The schema requires a nodeId, so the prompt must state which one; a model that has to
-    // guess it produces findings the orchestrator then discards as belonging to another node.
-    `Reviewing nodeId "${unit.id}". Every candidate you return must use exactly that nodeId.`,
     input.contextLabel??'',
     `Review only these categories: ${input.categories.join(', ')}.`,
     unit.placeholders.length?`Placeholders that must survive any replacement: ${unit.placeholders.join(', ')}.`:'',
@@ -60,17 +54,61 @@ export function reviewerInput(input:{unit:ReviewableUnit;contextLabel?:string;ca
     fence(marker,'reviewed-content',unit.text),
     'Repository evidence:',
     renderEvidence(input.evidence,marker),
+  ];
+}
+
+function verifierSection(input:VerifierUnitInput,marker:string):string[] {
+  return [
+    'Reviewed content:',
+    fence(marker,'reviewed-content',input.unit.text),
+    'Repository evidence:',
+    renderEvidence(input.evidence,marker),
+    'Proposed findings:',
+    input.candidates.map(candidate=>`candidateId: ${candidate.id}\ncategory: ${candidate.category} (${candidate.severity})\nquoted: ${candidate.exactText}\nreasoning: ${candidate.explanation}`).join('\n\n'),
+  ];
+}
+
+const VERDICT_INSTRUCTION='Return one result per candidateId, using exactly the identifiers above.';
+
+/**
+ * `contextLabel` carries whatever caller-specific framing line belongs after the nodeId
+ * statement (the GitHub path renders its content kind and file path into it); it is optional and
+ * omitted entirely when absent, so this function itself asserts nothing about where a
+ * ReviewableUnit's text came from.
+ */
+export function reviewerInput(input:ReviewerUnitInput&{marker:string}):string {
+  return [
+    // The schema requires a nodeId, so the prompt must state which one; a model that has to
+    // guess it produces findings the orchestrator then discards as belonging to another node.
+    `Reviewing nodeId "${input.unit.id}". Every candidate you return must use exactly that nodeId.`,
+    ...reviewerSection(input,input.marker),
   ].filter(Boolean).join('\n\n');
 }
 
-export function verifierInput(input:{unit:ReviewableUnit;candidates:readonly {id:string;category:string;severity:string;exactText:string;explanation:string}[];evidence:readonly EvidenceRecord[];marker:string}):string {
+/**
+ * Several units in one reviewer call (`LIMITS.nodeBatch`). Each unit states its own nodeId,
+ * categories and evidence, because routing and context are per unit; the orchestrator then
+ * validates every candidate against the unit it names, so a candidate that quotes one unit under
+ * another's id is suppressed rather than misplaced.
+ */
+export function reviewerBatchInput(input:{units:readonly ReviewerUnitInput[];marker:string}):string {
+  const count=input.units.length;
   return [
-    'Reviewed content:',
-    fence(input.marker,'reviewed-content',input.unit.text),
-    'Repository evidence:',
-    renderEvidence(input.evidence,input.marker),
-    'Proposed findings:',
-    input.candidates.map(candidate=>`candidateId: ${candidate.id}\ncategory: ${candidate.category} (${candidate.severity})\nquoted: ${candidate.exactText}\nreasoning: ${candidate.explanation}`).join('\n\n'),
-    'Return one result per candidateId, using exactly the identifiers above.',
+    `You are reviewing ${count} separate units of content. Review each unit on its own. Every candidate must use the nodeId of the unit whose content it quotes, exactly as written, and must quote only that unit's content.`,
+    ...input.units.map((unit,index)=>[`Unit ${index+1} of ${count}: nodeId "${unit.unit.id}".`,...reviewerSection(unit,input.marker)].filter(Boolean).join('\n\n')),
+  ].join('\n\n');
+}
+
+export function verifierInput(input:VerifierUnitInput&{marker:string}):string {
+  return [...verifierSection(input,input.marker),VERDICT_INSTRUCTION].join('\n\n');
+}
+
+/** Several units' candidates in one verifier call; each candidate is judged against its own unit only. */
+export function verifierBatchInput(input:{units:readonly VerifierUnitInput[];marker:string}):string {
+  const count=input.units.length;
+  return [
+    `You are checking proposed findings for ${count} separate units of content. Judge each finding only against the unit it is listed under.`,
+    ...input.units.map((unit,index)=>[`Unit ${index+1} of ${count}: nodeId "${unit.unit.id}".`,...verifierSection(unit,input.marker)].join('\n\n')),
+    VERDICT_INSTRUCTION,
   ].join('\n\n');
 }

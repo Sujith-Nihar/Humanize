@@ -67,9 +67,9 @@ it('stays responsive while indexing a repository-sized corpus', async () => {
 it('records a provider outage as a diagnostic rather than losing the other findings', async () => {
   const good=node('node-good','Unlock unprecedented potential with our cutting-edge platform.');
   const bad=node('node-bad','Our revolutionary state-of-the-art seamless solution.');
-  let call=0;
-  const flaky={id:'ollama',testConnection:vi.fn(),generateStructured:vi.fn(async()=>{
-    if(++call===1)throw Error('TRANSPORT');
+  // The outage affects every call that carries the bad node, whether batched or alone.
+  const flaky={id:'ollama',testConnection:vi.fn(),generateStructured:vi.fn(async({input}:{input:string})=>{
+    if(input.includes('"node-bad"'))throw Error('TRANSPORT');
     return {data:{candidates:[],searches:[]},provider:'ollama',model:'m',durationMs:1};
   })} as unknown as ModelProvider;
   const index=new EphemeralContextIndex(snapshot,[good,bad]);
