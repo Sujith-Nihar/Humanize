@@ -39,8 +39,14 @@ function boundaryMarker():string {
   return `hz-${fingerprint([Math.random(),Date.now()]).slice(0,24)}`;
 }
 
-/** Same heuristic as retrieval's budget, applied to the rendered prompt rather than raw evidence. */
-const estimateTokens=(text:string):number=>Math.ceil(text.length/4);
+/**
+ * Deliberately pessimistic. Measured against llama3.2 on 2026-09-28, rendered review prompts ran
+ * 2.4 to 3.0 characters per token, because evidence identifiers are hex digests that tokenize
+ * badly; the four-characters-per-token rule retrieval uses put a 13,886-token batch at 10,545 and
+ * sent it as one call, past the input budget. Overestimating only makes batches smaller.
+ */
+export const estimatePromptTokens=(text:string):number=>Math.ceil(text.length/2);
+const estimateTokens=estimatePromptTokens;
 
 /**
  * Groups items into model batches of at most `LIMITS.nodeBatch`, and at most the input token

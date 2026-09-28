@@ -290,3 +290,20 @@ it('leaves the single-unit prompts byte-for-byte unchanged', () => {
     'Reviewed content:\n\n<reviewed-content boundary="hz-fixed">\nSome copy\n</reviewed-content boundary="hz-fixed">\n\nRepository evidence:\n\nNo repository evidence was retrieved.\n\n'
     +'Proposed findings:\n\ncandidateId: c1\ncategory: clarity (minor)\nquoted: Some\nreasoning: why\n\nReturn one result per candidateId, using exactly the identifiers above.');
 });
+
+it('keeps every batched prompt inside the input budget even for token-dense content', async () => {
+  // Hex evidence identifiers tokenize at well under four characters per token; a batch sized on
+  // that assumption overflowed the model window in a live run.
+  const long='Our platform helps teams ship faster with fewer review cycles and clearer ownership. '.repeat(20);
+  const nodes=Array.from({length:12},(_,index)=>node({id:`node-${index+1}`,stableKey:`stable-${index+1}`,text:long,normalizedText:long.toLowerCase(),endOffset:long.length}));
+  const dense=Array.from({length:3},(_,index)=>({...evidenceRecord,id:`${index}`.padStart(64,'f'),quote:long}));
+  const reviewer=echoing(()=>({candidates:[],searches:[]}));
+  await reviewNodes(snapshot,nodes,{reviewer,reviewerModel:'fixture',verifier:approveAll,verifierModel:'fixture',context:vi.fn(async()=>dense),rules:vi.fn(()=>[])},{enabled});
+  const calls=(reviewer.generateStructured as ReturnType<typeof vi.fn>).mock.calls.map(call=>call[0] as {system:string;input:string});
+  expect(calls.length).toBeGreaterThan(1);
+  const batched=calls.filter(call=>call.input.includes('Unit 1 of'));
+  expect(batched.length).toBeGreaterThan(0);
+  // Checked against the worst ratio measured live (2.4 characters per token), not against the
+  // estimator itself, so a looser estimator fails here.
+  for(const call of batched)expect((call.system+call.input).length/2.4).toBeLessThanOrEqual(LIMITS.contextTokens);
+});
