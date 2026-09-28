@@ -1,12 +1,45 @@
 # Agent handoff
 
 **Resuming? Start with [plan-production-review.md](plan-production-review.md).** Stage 1 (batching
-model calls) is **implemented and unit-tested but its live acceptance is not yet measured**; that
-measurement is the next action. Stages 2 to 7 have not begun.
+model calls) is implemented, and its live acceptance was **measured on 2026-09-28 and not met**.
+The measurement moved the bottleneck: it is output tokens, not round trips. The next action is a
+decision on cutting output tokens (below). Stages 2 to 7 have not begun.
+
+## Session of 2026-09-28: stage 1 measured, and the bottleneck is output tokens
+
+**Result.** 12 gold nodes, `llama3.2`, Apple M3 with 16 GB: **164 s in one batched call, zero model
+candidates**. A repeat hit the adapter's 180 s cap and fell back to 12 single calls of 23–99 s each.
+
+**Why.** `llama3.2` decodes at **12–14 tokens/s** on this machine, with or without a JSON schema,
+at 4,096 or 16,000 context, with no memory pressure. Prompt evaluation is comparatively cheap.
+The reviewer emits 250–1,157 output tokens per node, so 12 nodes cost about 7,000 tokens, roughly
+ten minutes, however the calls are grouped. The two-minute target allows about 115 per node.
+
+**Where the tokens go.** In one raw reviewer response on a case labelled clean (`plain-hero`),
+about 600 of 783 output tokens were **ten copied evidence citations, each a 64-character hex id plus
+the quote repeated**. The verifier echoes 64-character candidate ids the same way.
+
+**Defect found and fixed.** The batch packer assumed 4 characters per token. Rendered prompts
+measure 2.4–3.0, because hex ids tokenize badly. The 12-node batch was **13,886 real tokens against
+an estimate of 10,545**, so it went out as one call beyond the 12,000 input budget, and with 4,000
+output tokens beyond the 16,000 Ollama window, which silently discards the start of the prompt. The
+estimator is now 2 characters per token, and a test bounds every batched prompt against the
+measured 2.4 ratio independently of the estimator; it fails with the old estimator.
+
+**Decision needed before continuing.** Proposed: give the model short aliases (`E1`, `C1`) for
+evidence and candidate ids, map them back deterministically, and stop asking for copied evidence
+quotes. The existing gates are unaffected: an alias that maps to no supplied record is still
+`evidence_not_supplied`. It changes the model-facing contract, so it needs an ADR. The single-unit
+builders used by the browser route should stay as they are.
+
+**Also worth checking.** 12–14 tokens/s is slow for a 3B Q4 model on an M3 GPU; if another machine
+decodes faster, the two-minute target moves with it.
+
+Diagnostic scripts used for these numbers were kept out of the repository.
 
 ## Session of 2026-09-27: stage 1, batched model calls
 
-**Where it stopped.** `pnpm check` exits 0 (375 tests, 47 files). The live measurement
+**Where it stopped (superseded by the 2026-09-28 measurement above).** `pnpm check` exits 0 (375 tests, 47 files). The live measurement
 [`evals/review/batch.live.test.ts`](../../evals/review/batch.live.test.ts) was started against
 `llama3.2` and had not finished when the session was saved, so **no timing is claimed**. Resume with:
 
