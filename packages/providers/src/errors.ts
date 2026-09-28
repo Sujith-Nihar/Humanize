@@ -9,7 +9,8 @@ export function httpError(status:number,retryAfter:string|null):ProviderError {
   if(status===403)return new ProviderError('PERMISSION');
   if(status===404)return new ProviderError('MODEL_UNAVAILABLE');
   if(status===429)return new ProviderError('RATE_LIMIT',true,retryMs);
-  if(status===408||status>=500)return new ProviderError('TRANSPORT',true,retryMs);
+  // 424 is Bedrock's ModelErrorException: the model failed while processing, not the request.
+  if(status===408||status===424||status>=500)return new ProviderError('TRANSPORT',true,retryMs);
   if(status===413)return new ProviderError('CONTEXT_LIMIT');
   return new ProviderError('UNSUPPORTED_CAPABILITY');
 }

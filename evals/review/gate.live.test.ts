@@ -1,22 +1,20 @@
 import { expect, it } from 'vitest';
 import { Category } from '@humanize/domain';
 import type { ContentNode, ReviewSnapshot } from '@humanize/domain';
-import { OllamaProvider } from '@humanize/providers';
 import { EphemeralContextIndex, buildContext } from '@humanize/retrieval';
 import { evaluateRules } from '@humanize/rules';
 import { planPublication, reviewNodes } from '@humanize/review';
 import type { CategoryName, NodeSignal } from '@humanize/review';
 import { REVIEW_GOLD } from './gold.js';
+import { liveProvider } from './live-provider.js';
 
-const baseUrl = process.env.HUMANIZE_OLLAMA_BASE_URL;
-const model = process.env.HUMANIZE_OLLAMA_MODEL;
-if (!baseUrl || !model) throw Error('Set HUMANIZE_OLLAMA_BASE_URL and HUMANIZE_OLLAMA_MODEL; a live test is never silently skipped.');
+const { provider, model, kind, timeoutMs } = liveProvider();
 
 const headSha = 'b'.repeat(40);
-const profile = { provider: 'ollama' as const, model, credentialRef: null, maxInputTokens: 12000, maxOutputTokens: 4000, evaluatedLanguages: ['en'] };
+const profile = { provider: kind, model, credentialRef: null, maxInputTokens: 12000, maxOutputTokens: 4000, evaluatedLanguages: ['en'] };
 const snapshot: ReviewSnapshot = {
   version: 1, organizationId: 'org', repositoryId: 'repo', installationId: 7, owner: 'acme', repository: 'site', pullNumber: 1,
-  baseSha: 'a'.repeat(40), headSha, configSha: 'c'.repeat(40), configHash: 'config', executionMode: 'runner', retentionMode: 'ephemeral',
+  baseSha: 'a'.repeat(40), headSha, configSha: 'c'.repeat(40), configHash: 'config', executionMode: kind === 'ollama' ? 'runner' : 'cloud', retentionMode: 'ephemeral',
   reviewer: profile, verifier: profile, language: 'en', allowUnevaluatedLanguage: false,
 };
 const enabled = Object.fromEntries(Category.options.map(category => [category, true])) as Record<CategoryName, boolean>;
@@ -28,7 +26,6 @@ const node = (id: string, kind: ContentNode['kind'], text: string): ContentNode 
 });
 
 it('measures review precision against the labelled corpus', async () => {
-  const provider = new OllamaProvider(baseUrl, true);
   const outcomes: { id: string; expected: boolean; actual: boolean; legitimate: boolean; ambiguous: boolean; categories: string[]; note: string }[] = [];
 
   for (const testCase of REVIEW_GOLD) {
@@ -38,7 +35,7 @@ it('measures review precision against the labelled corpus', async () => {
       reviewer: provider, reviewerModel: model, verifier: provider, verifierModel: model,
       context: async candidate => (await buildContext({ node: candidate, index })).evidence,
       rules: candidate => evaluateRules(candidate, { blockingRules: [{ type: 'forbidden_phrase', phrase: '100% secure' }] }) as NodeSignal[],
-    }, { enabled, timeoutMs: 180000 });
+    }, { enabled, timeoutMs });
     // Only what would actually reach the pull request counts, so ranking and the budget apply.
     const published = planPublication(result.findings).inline;
     outcomes.push({

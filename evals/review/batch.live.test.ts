@@ -1,27 +1,25 @@
 import { expect, it } from 'vitest';
 import { Category } from '@humanize/domain';
 import type { ContentNode, ReviewSnapshot } from '@humanize/domain';
-import { OllamaProvider } from '@humanize/providers';
 import { EphemeralContextIndex, buildContext } from '@humanize/retrieval';
 import { evaluateRules } from '@humanize/rules';
 import { reviewNodes, routeNode } from '@humanize/review';
 import type { CategoryName, NodeSignal, ReviewOutcome } from '@humanize/review';
 import { REVIEW_GOLD } from './gold.js';
+import { liveProvider } from './live-provider.js';
 
 /**
  * Stage 1 acceptance (plan-production-review.md): a 12-node review completes in under two
  * minutes. Set HUMANIZE_BATCH_BASELINE=1 to also review the same nodes one call at a time,
  * which is exactly the behaviour before batching, for a like-for-like comparison.
  */
-const baseUrl = process.env.HUMANIZE_OLLAMA_BASE_URL;
-const model = process.env.HUMANIZE_OLLAMA_MODEL;
-if (!baseUrl || !model) throw Error('Set HUMANIZE_OLLAMA_BASE_URL and HUMANIZE_OLLAMA_MODEL; a live test is never silently skipped.');
+const { provider, model, kind, timeoutMs } = liveProvider();
 
 const headSha = 'b'.repeat(40);
-const profile = { provider: 'ollama' as const, model, credentialRef: null, maxInputTokens: 12000, maxOutputTokens: 4000, evaluatedLanguages: ['en'] };
+const profile = { provider: kind, model, credentialRef: null, maxInputTokens: 12000, maxOutputTokens: 4000, evaluatedLanguages: ['en'] };
 const snapshot: ReviewSnapshot = {
   version: 1, organizationId: 'org', repositoryId: 'repo', installationId: 7, owner: 'acme', repository: 'site', pullNumber: 1,
-  baseSha: 'a'.repeat(40), headSha, configSha: 'c'.repeat(40), configHash: 'config', executionMode: 'runner', retentionMode: 'ephemeral',
+  baseSha: 'a'.repeat(40), headSha, configSha: 'c'.repeat(40), configHash: 'config', executionMode: kind === 'ollama' ? 'runner' : 'cloud', retentionMode: 'ephemeral',
   reviewer: profile, verifier: profile, language: 'en', allowUnevaluatedLanguage: false,
 };
 const enabled = Object.fromEntries(Category.options.map(category => [category, true])) as Record<CategoryName, boolean>;
@@ -36,7 +34,6 @@ const node = (id: string, kind: ContentNode['kind'], text: string, line: number)
 const nodes = REVIEW_GOLD.map((testCase, index) => node(testCase.id, testCase.kind, testCase.text, index + 1))
   .filter(candidate => routeNode(candidate, { enabled }).eligible).slice(0, 12);
 const index = new EphemeralContextIndex(snapshot, nodes);
-const provider = new OllamaProvider(baseUrl, true);
 const ports = {
   reviewer: provider, reviewerModel: model, verifier: provider, verifierModel: model,
   context: async (candidate: ContentNode) => (await buildContext({ node: candidate, index })).evidence,
@@ -64,12 +61,14 @@ it('reviews twelve changed nodes in under two minutes', async () => {
   if (process.env.HUMANIZE_BATCH_BASELINE === '1') {
     const started = performance.now();
     const outcomes: ReviewOutcome[] = [];
-    for (const single of nodes) outcomes.push(await reviewNodes(snapshot, [single], ports, { enabled, timeoutMs: 180000 }));
+    for (const single of nodes) outcomes.push(await reviewNodes(snapshot, [single], ports, { enabled, timeoutMs }));
     summarise('one call per node (before)', outcomes, performance.now() - started);
   }
   const started = performance.now();
-  const outcome = await reviewNodes(snapshot, nodes, ports, { enabled, timeoutMs: 180000 });
+  const outcome = await reviewNodes(snapshot, nodes, ports, { enabled, timeoutMs });
   const summary = summarise('batched (after)', [outcome], performance.now() - started);
   expect(outcome.reviewed).toBe(12);
+  // A review whose model calls all failed is fast and worthless; it must not pass as a timing.
+  expect(outcome.failures, `nodes the model never reviewed: ${JSON.stringify(outcome.failures)}`).toEqual([]);
   expect(summary.seconds).toBeLessThan(120);
 }, 1_800_000);
