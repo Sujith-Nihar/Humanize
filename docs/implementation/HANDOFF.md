@@ -5,6 +5,36 @@ model calls) is implemented, and its live acceptance was **measured on 2026-09-2
 The measurement moved the bottleneck: it is output tokens, not round trips. The next action is a
 decision on cutting output tokens (below). Stages 2 to 7 have not begun.
 
+## Session of 2026-09-28, later: Amazon Bedrock support (ADR-041)
+
+The user has Bedrock access, so Bedrock was added as a fifth provider to measure a cloud model.
+[`bedrock.ts`](../../packages/providers/src/bedrock.ts) calls Converse on a fixed regional
+endpoint with a Bedrock API key as a bearer token, using native `json_schema` structured output.
+Bedrock rejects length and numeric schema keywords, so those are stripped from what is sent while
+local Zod validation still enforces them. Mocked contract tests pass; **no live Bedrock call has
+been made yet.**
+
+To measure, with a model that supports structured output in the chosen region:
+
+```sh
+export AWS_BEARER_TOKEN_BEDROCK=...   # from ~/.config/humanize/dev-env.sh, never committed
+export HUMANIZE_BEDROCK_REGION=us-east-1 HUMANIZE_BEDROCK_MODEL=<model or inference profile id>
+pnpm exec vitest run --config vitest.live.config.ts packages/providers/bedrock.live.test.ts
+pnpm exec vitest run --config vitest.live.config.ts evals/review/batch.live.test.ts
+pnpm exec vitest run --config vitest.live.config.ts evals/review/gate.live.test.ts
+```
+
+Setting `HUMANIZE_BEDROCK_MODEL` switches both evaluations to Bedrock; otherwise they use Ollama as
+before, and nothing falls back between them. The first call per schema may be slow while Bedrock
+compiles its grammar (documented as up to a few minutes, then cached for 24 hours) and can time
+out against the 90 s cloud deadline: re-run before concluding anything.
+
+The batch live test also had a false pass, found while smoke-testing: with the model unreachable,
+every call failed quickly and "under 120 seconds" held. It now requires that no node failed.
+
+Still absent before any customer repository reaches Bedrock: a worker executor for `cloud` jobs,
+credential plumbing (`apps/worker` hard-codes `credentialRef:null`), and organization opt-in.
+
 ## Session of 2026-09-28: stage 1 measured, and the bottleneck is output tokens
 
 **Result.** 12 gold nodes, `llama3.2`, Apple M3 with 16 GB: **164 s in one batched call, zero model

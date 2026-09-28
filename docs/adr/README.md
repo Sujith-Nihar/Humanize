@@ -39,3 +39,5 @@ Upstream ADR-001 through ADR-020 remain authoritative in [specification §3](../
 - [ADR-038: Transient publication payloads](ADR-038.md) — accepted, enables asynchronous publication
 
 - [ADR-039: Formulaic constructions as standalone findings](ADR-039.md) — accepted, extends ADR-037
+
+- [ADR-041: Amazon Bedrock as a fifth cloud provider](ADR-041.md) — accepted for the adapter and live lane; cloud execution in the worker not included
