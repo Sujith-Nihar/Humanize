@@ -3,6 +3,7 @@ export { z };
 import { fingerprint,safePath } from '@humanize/shared';
 
 export const PROTOCOL_VERSION = 1 as const;
+const LIMITS_SUBJECTIVE_INLINE = 5;
 export const Id = z.string().min(1).max(200);
 export const Sha = z.string().regex(/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/);
 export const PathSchema = z.string().refine(safePath, 'Unsafe repository path');
@@ -71,12 +72,57 @@ export interface FileDiff { oldPath: string | null; newPath: string | null; adde
 export interface DiffMap { repositoryId: string; baseSha: string; headSha: string; mergeBaseSha: string; files: FileDiff[]; }
 export const ModelProfileSchema = z.object({ provider: ProviderId, model: z.string().min(1).max(200), credentialRef: Id.nullable(), maxInputTokens: z.number().int().min(1000).max(1000000), maxOutputTokens: z.number().int().min(100).max(100000), evaluatedLanguages: z.array(z.string().min(2).max(20)).default(['en']) }).strict();
 export type ModelProfile = z.infer<typeof ModelProfileSchema>;
+/** A path glob: matched, never executed, and never able to escape the repository root. */
+const SafeGlob=z.string().min(1).max(500).refine(v=>!v.startsWith('/')&&!v.includes('..')&&!v.includes('\0'),'Unsafe pattern');
+const SettingPhrase=z.string().min(1).max(200);
+/** Paths that are almost never user-visible product content, excluded unless configuration says otherwise. */
+export const DEFAULT_EXCLUDE=Object.freeze(['**/*.test.*','**/*.spec.*','**/*.stories.*','dist/**','build/**','coverage/**']);
+/**
+ * The review settings resolved for one scope: administrator policy, then trusted-base repository
+ * configuration, clamped by the administrator's caps. Only settings something downstream acts on
+ * are here. Each one changes what is scanned, extracted, routed, flagged or published (ADR-043).
+ */
+export const ReviewSettingsSchema=z.object({
+  /** The categories this scope may review; anything absent is off. */
+  categories:z.array(Category).max(Category.options.length),
+  minimumSeverity:Severity,
+  maxSubjectiveInline:z.number().int().min(0).max(LIMITS_SUBJECTIVE_INLINE),
+  include:z.array(SafeGlob).max(200),
+  exclude:z.array(SafeGlob).max(200),
+  visibleProps:z.array(z.string().min(1).max(100)).max(200),
+  visibleCalls:z.array(z.string().min(1).max(100)).max(200),
+  avoid:z.array(SettingPhrase).max(200),
+  terminology:z.record(SettingPhrase,SettingPhrase),
+  blockingRules:z.array(z.object({type:z.literal('forbidden_phrase'),phrase:SettingPhrase}).strict()).max(200),
+}).strict();
+export type ReviewSettings=z.infer<typeof ReviewSettingsSchema>;
+/**
+ * Settings for the repository, plus any path-scoped overrides in declaration order. A file takes
+ * the first override whose globs match it, exactly as configuration resolution does.
+ */
+export const ReviewScopeSchema=z.object({
+  settings:ReviewSettingsSchema,
+  overrides:z.array(z.object({paths:z.array(SafeGlob).min(1).max(100),settings:ReviewSettingsSchema}).strict()).max(50),
+}).strict();
+export type ReviewScope=z.infer<typeof ReviewScopeSchema>;
+/** What resolution yields with no repository configuration and a default policy. */
+export const DEFAULT_REVIEW_SETTINGS:ReviewSettings=Object.freeze({
+  categories:[...Category.options],minimumSeverity:'minor',maxSubjectiveInline:LIMITS_SUBJECTIVE_INLINE,
+  include:[],exclude:[...DEFAULT_EXCLUDE],visibleProps:[],visibleCalls:[],avoid:[],terminology:{},blockingRules:[],
+}) as ReviewSettings;
+export const DEFAULT_REVIEW_SCOPE:ReviewScope=Object.freeze({settings:DEFAULT_REVIEW_SETTINGS,overrides:[]}) as ReviewScope;
+
 export const ReviewSnapshotSchema = z.object({
   version: z.literal(1), organizationId: Id, repositoryId: Id, installationId: z.number().int().positive(),
   owner: z.string().regex(/^[a-zA-Z0-9-]+$/), repository: z.string().regex(/^[a-zA-Z0-9_.-]+$/), pullNumber: z.number().int().positive(),
   baseSha: Sha, headSha: Sha, configSha: Sha, configHash: Id,
   executionMode: z.enum(['cloud','runner']), retentionMode: RetentionMode,
   reviewer: ModelProfileSchema, verifier: ModelProfileSchema, language: z.string().default('en'), allowUnevaluatedLanguage: z.boolean().default(false),
+  /**
+   * What to review and how, fixed when the run was created. A snapshot written before this field
+   * existed parses to the defaults, which are what resolution would have produced for it.
+   */
+  review: ReviewScopeSchema.default(DEFAULT_REVIEW_SCOPE),
 }).strict().refine(v => v.executionMode !== 'runner' || (v.reviewer.provider === 'ollama' && v.verifier.provider === 'ollama'), 'Private jobs require local models');
 export type ReviewSnapshot = z.infer<typeof ReviewSnapshotSchema>;
 export const RunStateSchema = z.enum(['RECEIVED','QUEUED','ACQUIRING_REPO','EXTRACTING','BUILDING_CONTEXT','REVIEWING','VERIFYING','READY_TO_PUBLISH','PUBLISHING','COMPLETE','STALE','CANCELLED','FAILED_RETRYABLE','FAILED_FINAL']);
@@ -108,7 +154,7 @@ export interface RetrievalPort { search(query:RetrievalQuery):Promise<EvidenceRe
 export interface SecretStore { put(organizationId:string, plaintext:string):Promise<string>; resolve(organizationId:string,reference:string):Promise<string>; revoke(organizationId:string,reference:string):Promise<void>; }
 export const Classification = z.enum(['SUPPORTED_CONTENT','POSSIBLE_CONTENT','NON_CONTENT_SOURCE','GENERATED','DEPENDENCY','BINARY','TOO_LARGE','IGNORED_BY_CONFIG','UNKNOWN']);
 export interface InventoryEntry { path:string; blobSha:string; mode:string; size?:number|undefined; classification:z.infer<typeof Classification>; }
-export const LIMITS = Object.freeze({fileBytes:1024*1024,nodeChars:10000,parserMs:5000,parserMemoryMb:256,fileBatch:200,nodeBatch:20,nodesPerFile:2000,contextTokens:12000,outputTokens:4000,jobMs:30*60*1000,workspaceBytes:4*1024*1024*1024,subjectiveInline:5,expansionQueries:3});
+export const LIMITS = Object.freeze({fileBytes:1024*1024,nodeChars:10000,parserMs:5000,parserMemoryMb:256,fileBatch:200,nodeBatch:20,nodesPerFile:2000,contextTokens:12000,outputTokens:4000,jobMs:30*60*1000,workspaceBytes:4*1024*1024*1024,subjectiveInline:LIMITS_SUBJECTIVE_INLINE,expansionQueries:3});
 export const GitHubEventSchema=z.object({
   event:z.enum(['installation','installation_repositories','pull_request','push','check_run']),action:z.string().max(100),
   installationId:z.number().int().positive(),accountId:z.number().int().positive(),accountLogin:z.string().max(100),

@@ -1,12 +1,12 @@
 import { expect, it } from 'vitest';
-import { DIGEST_VERSION, ReviewSnapshotSchema, domainDigest, runnerResultDigest, snapshotDigest } from './src/index.js';
+import { DIGEST_VERSION, ReviewSnapshotSchema, domainDigest, runnerResultDigest, snapshotDigest,DEFAULT_REVIEW_SCOPE } from './src/index.js';
 import type { ReviewSnapshot } from './src/index.js';
 
 const profile = { provider: 'ollama' as const, model: 'fixture', credentialRef: null, maxInputTokens: 12000, maxOutputTokens: 4000, evaluatedLanguages: ['en'] };
 const snapshot: ReviewSnapshot = {
   version: 1, organizationId: 'org', repositoryId: 'repo', installationId: 7, owner: 'acme', repository: 'site',
   pullNumber: 3, baseSha: 'a'.repeat(40), headSha: 'b'.repeat(40), configSha: 'c'.repeat(40), configHash: 'config',
-  executionMode: 'runner', retentionMode: 'ephemeral', reviewer: profile, verifier: profile, language: 'en', allowUnevaluatedLanguage: false,
+  executionMode: 'runner', retentionMode: 'ephemeral', reviewer: profile, verifier: profile, language: 'en', allowUnevaluatedLanguage:false,review:DEFAULT_REVIEW_SCOPE,
 };
 const result = {
   version: 1 as const, leaseId: '11111111-1111-4111-8111-111111111111', fence: 1,

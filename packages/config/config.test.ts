@@ -1,5 +1,5 @@
 import { expect,it } from 'vitest';
-import { loadRepositoryConfig,resolveConfiguration,MAX_CONFIG_BYTES } from './src/index.js';
+import { enabledCategories,loadRepositoryConfig,resolveConfiguration,resolveReviewScope,settingsForPath,MAX_CONFIG_BYTES } from './src/index.js';
 import type { OrganizationPolicy } from './src/index.js';
 
 const policy:OrganizationPolicy={
@@ -102,6 +102,8 @@ overrides:
 `;
   expect(resolve(yaml,'docs/guide.md').minimumSeverity).toBe('major');
   expect(resolve(yaml,'app/page.tsx').minimumSeverity).toBe('minor');
+  // The override narrows what it names and keeps the rest of the repository's comments settings.
+  expect(resolve(yaml,'docs/guide.md').maxSubjectiveInline).toBe(4);
   // An override carrying an administrator-only field invalidates the file rather than applying.
   expect(load(`version: 1\noverrides:\n  - paths: ["docs/**"]\n    retention_mode: indexed\n`).violations).toEqual(['CONFIG_SCHEMA_INVALID']);
 });
@@ -135,4 +137,85 @@ it('produces a stable digest that changes with the effective outcome', () => {
   expect(resolve('version: 1\ninclude: ["app/**"]\n').digest).not.toBe(resolve('version: 1\n').digest);
   // Repository text that cannot change the outcome cannot change the digest either.
   expect(resolve('version: 1\nreview:\n  drafts: true\n').digest).toBe(resolve('version: 1\n').digest);
+});
+
+it('resolves the settings a review carries, including each path override', () => {
+  const loaded=load(`version: 1
+review:
+  categories:
+    clarity: false
+comments:
+  max_subjective_inline: 9
+exclude: ["legacy/**"]
+terminology:
+  prefer:
+    e-mail: email
+overrides:
+  - paths: ["docs/**"]
+    review:
+      categories:
+        terminology: false
+    comments:
+      minimum_severity: major
+  - paths: ["docs/**", "marketing/**"]
+    voice:
+      avoid: ["synergy"]
+`);
+  // A test that feeds an invalid file would silently measure the defaults instead.
+  expect(loaded.violations).toEqual([]);
+  const scope=resolveReviewScope({policy,repository:loaded.config});
+  // Repository-wide: the repository switched clarity off, and could not switch on anything the
+  // administrator withheld, and its inline request is clamped by the cap.
+  expect(scope.settings.categories).toEqual(['ai_like_generic','terminology']);
+  expect(scope.settings.maxSubjectiveInline).toBe(5);
+  expect(scope.settings.exclude).toEqual(['legacy/**']);
+  expect(scope.settings.terminology).toEqual({'e-mail':'email'});
+  // The administrator's blocking rule is always present.
+  expect(scope.settings.blockingRules).toEqual([{type:'forbidden_phrase',phrase:'100% secure'}]);
+
+  // A file takes the first override that matches it, exactly as resolution chooses.
+  const docs=settingsForPath(scope,'docs/guide.md');
+  expect(docs.categories).toEqual(['ai_like_generic']);
+  expect(docs.minimumSeverity).toBe('major');
+  expect(docs).toEqual(resolveSettings('docs/guide.md'));
+  const marketing=settingsForPath(scope,'marketing/home.md');
+  expect(marketing.avoid).toEqual(['synergy']);
+  expect(settingsForPath(scope,'app/page.tsx')).toEqual(scope.settings);
+  expect(enabledCategories(docs)).toMatchObject({ai_like_generic:true,terminology:false,clarity:false});
+
+  function resolveSettings(path:string){
+    const effective=resolveConfiguration({policy,repository:load(`version: 1
+review:
+  categories:
+    clarity: false
+comments:
+  max_subjective_inline: 9
+exclude: ["legacy/**"]
+terminology:
+  prefer:
+    e-mail: email
+overrides:
+  - paths: ["docs/**"]
+    review:
+      categories:
+        terminology: false
+    comments:
+      minimum_severity: major
+  - paths: ["docs/**", "marketing/**"]
+    voice:
+      avoid: ["synergy"]
+`).config,path});
+    return {categories:Object.entries(effective.categories).filter(([,on])=>on).map(([name])=>name),
+      minimumSeverity:effective.minimumSeverity,maxSubjectiveInline:effective.maxSubjectiveInline,
+      include:[...effective.include],exclude:[...effective.exclude],visibleProps:[...effective.visibleProps],visibleCalls:[...effective.visibleCalls],
+      avoid:[...effective.avoid],terminology:{...effective.terminology},blockingRules:effective.blockingRules.map(rule=>({...rule}))};
+  }
+});
+
+it('resolves no repository file to the product defaults, clamped by policy', () => {
+  const scope=resolveReviewScope({policy,repository:null});
+  expect(scope.overrides).toEqual([]);
+  expect(scope.settings.categories).toEqual(['ai_like_generic','clarity','terminology']);
+  expect(scope.settings.minimumSeverity).toBe('minor');
+  expect(scope.settings.exclude).toContain('**/*.test.*');
 });

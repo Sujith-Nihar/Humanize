@@ -1,4 +1,5 @@
 import { expect,it,vi } from 'vitest';
+import { DEFAULT_REVIEW_SCOPE } from '@humanize/domain';
 import { executeCloudReview } from './src/cloud-worker.js';
 import type { CloudPorts } from './src/cloud-worker.js';
 import type { ExecutionReport } from '@humanize/execution';
@@ -13,7 +14,7 @@ const snapshot=(overrides:Partial<ReviewSnapshot>={}):ReviewSnapshot=>({
   version:1,organizationId:'org',repositoryId:'repo',installationId:1,owner:'acme',repository:'site',pullNumber:1,
   baseSha:'a'.repeat(40),headSha,configSha:'c'.repeat(40),configHash:'hash',
   executionMode:'cloud',retentionMode:'ephemeral',reviewer:hosted,verifier:hosted,
-  language:'en',allowUnevaluatedLanguage:false,...overrides,
+  language:'en',allowUnevaluatedLanguage:false,review:DEFAULT_REVIEW_SCOPE,...overrides,
 });
 const payload:JobPayload={version:1,organizationId:'org',repositoryId:'repo',runId,traceId:'t',idempotencyKey:'k'};
 
@@ -31,7 +32,7 @@ const ports=(overrides:Partial<CloudPorts>={}):CloudPorts=>({
   token:async()=>'ghs_read_only',
   execute:async()=>report(),
   schedulePublication:async()=>{},
-  config:{enabled:{ai_like_generic:true} as never},
+  config:{},
   ...overrides,
 });
 

@@ -1,5 +1,5 @@
 import { expect,it } from 'vitest';
-import { Category } from '@humanize/domain';
+import { Category,DEFAULT_REVIEW_SCOPE } from '@humanize/domain';
 import type { ContentNode,ReviewSnapshot } from '@humanize/domain';
 import { OllamaProvider } from '@humanize/providers';
 import { EphemeralContextIndex,buildContext } from '@humanize/retrieval';
@@ -14,7 +14,7 @@ if(!baseUrl||!model)throw Error('Set HUMANIZE_OLLAMA_BASE_URL and HUMANIZE_OLLAM
 const provider=new OllamaProvider(baseUrl,true);
 const headSha='b'.repeat(40);
 const profile={provider:'ollama' as const,model,credentialRef:null,maxInputTokens:12000,maxOutputTokens:4000,evaluatedLanguages:['en']};
-const snapshot:ReviewSnapshot={version:1,organizationId:'org',repositoryId:'repo',installationId:7,owner:'acme',repository:'site',pullNumber:1,baseSha:'a'.repeat(40),headSha,configSha:'c'.repeat(40),configHash:'config',executionMode:'runner',retentionMode:'ephemeral',reviewer:profile,verifier:profile,language:'en',allowUnevaluatedLanguage:false};
+const snapshot:ReviewSnapshot={version:1,organizationId:'org',repositoryId:'repo',installationId:7,owner:'acme',repository:'site',pullNumber:1,baseSha:'a'.repeat(40),headSha,configSha:'c'.repeat(40),configHash:'config',executionMode:'runner',retentionMode:'ephemeral',reviewer:profile,verifier:profile,language:'en',allowUnevaluatedLanguage:false,review:DEFAULT_REVIEW_SCOPE};
 const enabled=Object.fromEntries(Category.options.map(c=>[c,true])) as Record<CategoryName,boolean>;
 let counter=0;
 const node=(text:string,overrides:Partial<ContentNode>={}):ContentNode=>({

@@ -306,6 +306,9 @@ importers:
 
   packages/execution:
     dependencies:
+      '@humanize/config':
+        specifier: workspace:*
+        version: link:../config
       '@humanize/domain':
         specifier: workspace:*
         version: link:../domain

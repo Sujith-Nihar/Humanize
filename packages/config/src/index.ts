@@ -1,7 +1,8 @@
 import { parse } from 'yaml';
 import picomatch from 'picomatch';
-import { Category,LIMITS,z } from '@humanize/domain';
+import { Category,DEFAULT_EXCLUDE,LIMITS,ReviewScopeSchema,z } from '@humanize/domain';
 import { Severity } from '@humanize/domain';
+import type { ReviewScope,ReviewSettings } from '@humanize/domain';
 import { fingerprint } from '@humanize/shared';
 import { OrganizationPolicySchema,RepositoryConfigSchema } from './schema.js';
 import type { OrganizationPolicy,RepositoryConfig } from './schema.js';
@@ -55,10 +56,26 @@ export function loadRepositoryConfig(source:string):LoadedConfig {
   return parsed.success?{config:parsed.data,violations:[]}:{config:null,violations:['CONFIG_SCHEMA_INVALID']};
 }
 
-const DEFAULT_EXCLUDE=['**/*.test.*','**/*.spec.*','**/*.stories.*','dist/**','build/**','coverage/**'];
+
+const isMapping=(value:unknown):value is Record<string,unknown>=>typeof value==='object'&&value!==null&&!Array.isArray(value);
+
+/**
+ * Merges mappings key by key and lets lists replace. A path override narrows the fields it names
+ * and keeps the rest: an override that switches off one category must not quietly switch back on
+ * a category the repository switched off, which a shallow merge of `review` did. A list is a
+ * complete statement — an override's `avoid` is the list for those paths — so it replaces.
+ */
+function merge(base:Record<string,unknown>,override:Record<string,unknown>):Record<string,unknown> {
+  const result:Record<string,unknown>={...base};
+  for(const [key,value] of Object.entries(override)){
+    const current=result[key];
+    result[key]=isMapping(current)&&isMapping(value)?merge(current,value):value;
+  }
+  return result;
+}
 
 function layer(base:RepositoryConfig|null,override:RepositoryConfig|undefined):RepositoryConfig {
-  return {...(base??{version:1}),...(override??{}),version:1};
+  return {...merge((base??{version:1}) as Record<string,unknown>,(override??{}) as Record<string,unknown>),version:1} as RepositoryConfig;
 }
 
 /**
@@ -68,11 +85,14 @@ function layer(base:RepositoryConfig|null,override:RepositoryConfig|undefined):R
  * whatever it contains — and repository choices are clamped by the administrator's caps.
  */
 export function resolveConfiguration(input:{policy:OrganizationPolicy;repository?:RepositoryConfig|null|undefined;path?:string|undefined}):EffectiveConfig {
-  const policy=OrganizationPolicySchema.parse(input.policy);
   const base=input.repository??null;
   const scoped=input.path===undefined?undefined
     :base?.overrides?.find(override=>picomatch.isMatch(input.path!,[...override.paths],{dot:true}));
-  const merged=layer(base,scoped as RepositoryConfig|undefined);
+  return resolveLayer(OrganizationPolicySchema.parse(input.policy),base,scoped as RepositoryConfig|undefined);
+}
+
+function resolveLayer(policy:OrganizationPolicy,base:RepositoryConfig|null,scoped:RepositoryConfig|undefined):EffectiveConfig {
+  const merged=layer(base,scoped);
 
   const permitted=new Set(policy.permittedCategories);
   const categories=Object.fromEntries(Category.options.map(category=>{
@@ -106,4 +126,41 @@ export function resolveConfiguration(input:{policy:OrganizationPolicy;repository
     verifier:policy.verifier,
   };
   return Object.freeze({...resolved,digest:fingerprint(resolved)});
+}
+
+/** The part of an effective configuration that governs a review, in snapshot form. */
+function settingsOf(effective:EffectiveConfig):ReviewSettings {
+  return {
+    categories:Category.options.filter(category=>effective.categories[category]),
+    minimumSeverity:effective.minimumSeverity,maxSubjectiveInline:effective.maxSubjectiveInline,
+    include:[...effective.include],exclude:[...effective.exclude],
+    visibleProps:[...effective.visibleProps],visibleCalls:[...effective.visibleCalls],
+    avoid:[...effective.avoid],terminology:{...effective.terminology},blockingRules:effective.blockingRules.map(rule=>({...rule})),
+  };
+}
+
+/**
+ * Resolves the settings a review runs with, once, when the run is created: the repository-wide
+ * settings and one resolved set per path-scoped override. It goes into the snapshot, so every
+ * executor and the publisher apply the same answer rather than each resolving its own (ADR-043).
+ */
+export function resolveReviewScope(input:{policy:OrganizationPolicy;repository?:RepositoryConfig|null|undefined}):ReviewScope {
+  const policy=OrganizationPolicySchema.parse(input.policy);
+  const base=input.repository??null;
+  return ReviewScopeSchema.parse({
+    settings:settingsOf(resolveLayer(policy,base,undefined)),
+    overrides:(base?.overrides??[]).map(({paths,...fields})=>({paths:[...paths],
+      settings:settingsOf(resolveLayer(policy,base,{version:1,...fields}))})),
+  });
+}
+
+/** The settings that govern one file: the first override matching it, as resolution chooses. */
+export function settingsForPath(scope:ReviewScope,path:string):ReviewSettings {
+  return scope.overrides.find(override=>picomatch.isMatch(path,[...override.paths],{dot:true}))?.settings??scope.settings;
+}
+
+/** A settings category list as the routing record the review pipeline takes. */
+export function enabledCategories(settings:ReviewSettings):Record<z.infer<typeof Category>,boolean> {
+  const enabled=new Set(settings.categories);
+  return Object.fromEntries(Category.options.map(category=>[category,enabled.has(category)])) as Record<z.infer<typeof Category>,boolean>;
 }

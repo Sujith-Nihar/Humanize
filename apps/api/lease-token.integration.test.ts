@@ -1,4 +1,5 @@
 import { beforeAll,afterAll,beforeEach,expect,it,vi } from 'vitest';
+import { DEFAULT_REVIEW_SCOPE } from '@humanize/domain';
 import { randomUUID,randomInt } from 'node:crypto';
 import { Database,migrate,RunnerStore,RunStore } from '@humanize/db';
 import { createApi } from './src/app.js';
@@ -36,7 +37,7 @@ beforeAll(async()=>{
   await tenant(org,repo,installation,githubRepositoryId);
   await tenant(otherOrg,otherRepo,otherInstallation,randomInt(1,1000000000));
   const profile={provider:'ollama' as const,model:'fixture',credentialRef:null,maxInputTokens:12000,maxOutputTokens:4000,evaluatedLanguages:['en']};
-  snapshot={version:1,organizationId:org,repositoryId:repo,installationId:installation,owner:'acme',repository:'site',pullNumber:1,baseSha:'a'.repeat(40),headSha:'b'.repeat(40),configSha:'c'.repeat(40),configHash:'config',executionMode:'runner',retentionMode:'ephemeral',reviewer:profile,verifier:profile,language:'en',allowUnevaluatedLanguage:false};
+  snapshot={version:1,organizationId:org,repositoryId:repo,installationId:installation,owner:'acme',repository:'site',pullNumber:1,baseSha:'a'.repeat(40),headSha:'b'.repeat(40),configSha:'c'.repeat(40),configHash:'config',executionMode:'runner',retentionMode:'ephemeral',reviewer:profile,verifier:profile,language:'en',allowUnevaluatedLanguage:false,review:DEFAULT_REVIEW_SCOPE};
   ({credential,runnerId}=await enrolled(org,repo));
 },30000);
 afterAll(async()=>{await app.close();await db.close();});

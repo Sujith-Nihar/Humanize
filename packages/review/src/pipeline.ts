@@ -22,6 +22,12 @@ export interface ReviewPorts {
 }
 export interface ReviewOptions extends RoutingOptions {
   minimumSeverity?:'major'|'minor'|'nit';
+  /**
+   * The categories and severity floor for one node, when they differ by path. Configuration can
+   * scope both to a set of files, so a single value for the whole review would apply one file's
+   * rules to another. Absent, `enabled` and `minimumSeverity` apply to every node.
+   */
+  scopeFor?:(node:ContentNode)=>{enabled:Readonly<Record<CategoryName,boolean>>;minimumSeverity:'major'|'minor'|'nit'};
   confidenceThreshold?:number;
   verificationThreshold?:number;
   timeoutMs?:number;
@@ -81,7 +87,7 @@ export function packBatches<T>(items:readonly T[],cost:(item:T)=>number,budget:n
   return batches;
 }
 
-interface Prepared { node:ContentNode; unit:ReviewableUnit; routing:RoutingDecision; signals:NodeSignal[]; evidence:Map<string,EvidenceRecord>; contextLabel:string; }
+interface Prepared { node:ContentNode; unit:ReviewableUnit; routing:RoutingDecision; minimum:number; signals:NodeSignal[]; evidence:Map<string,EvidenceRecord>; contextLabel:string; }
 
 /**
  * Reviews changed content in batches. Deterministic blocking-rule violations become findings
@@ -97,7 +103,7 @@ export async function reviewNodes(snapshot:ReviewSnapshot,nodes:readonly Content
   const marker=options.marker??boundaryMarker();
   const threshold=options.confidenceThreshold??DEFAULT_CONFIDENCE;
   const verificationThreshold=options.verificationThreshold??DEFAULT_VERIFICATION_CONFIDENCE;
-  const minimum=SEVERITY_RANK[options.minimumSeverity??'minor'];
+  const scopeOf=(node:ContentNode)=>options.scopeFor?.(node)??{enabled:options.enabled,minimumSeverity:options.minimumSeverity??'minor'};
   const timeoutMs=options.timeoutMs??60000;
   const findingsByNode=new Map<string,ValidatedFinding[]>(nodes.map(node=>[node.id,[]]));
   const suppressed:SuppressedCandidate[]=[];
@@ -111,7 +117,8 @@ export async function reviewNodes(snapshot:ReviewSnapshot,nodes:readonly Content
   for(const node of nodes){
     options.signal?.throwIfAborted();
     if(node.repositoryId!==snapshot.repositoryId||node.commitSha!==snapshot.headSha)throw Error('NODE_OUT_OF_SNAPSHOT');
-    const routing=routeNode(node,options);
+    const scope=scopeOf(node);
+    const routing=routeNode(node,{...options,enabled:scope.enabled});
     const signals=ports.rules(node);
 
     // A blocking violation is a customer policy; a standalone signal is an objectively
@@ -135,7 +142,7 @@ export async function reviewNodes(snapshot:ReviewSnapshot,nodes:readonly Content
       for(const signal of signals)evidence.set(signal.evidence.id,signal.evidence);
       // Repository-specific preparation ends here: everything downstream that reaches the model
       // or validates its output does so through this minimal, source-agnostic shape.
-      prepared.push({node,unit:{id:node.id,text:node.text,placeholders:node.placeholders},routing,signals,evidence,
+      prepared.push({node,unit:{id:node.id,text:node.text,placeholders:node.placeholders},routing,minimum:SEVERITY_RANK[scope.minimumSeverity],signals,evidence,
         contextLabel:`Content kind: ${node.kind}. Source: ${node.filePath}.`});
     }catch(error){
       if(options.signal?.aborted)throw error;
@@ -187,7 +194,7 @@ export async function reviewNodes(snapshot:ReviewSnapshot,nodes:readonly Content
         const reason=validateCandidate(candidate,item.unit,item.routing.categories,item.evidence);
         if(reason){suppressed.push({nodeId:item.node.id,category:candidate.category,reason});continue;}
         if(candidate.confidence<threshold){suppressed.push({nodeId:item.node.id,category:candidate.category,reason:'below_confidence'});continue;}
-        if(SEVERITY_RANK[candidate.severity]<minimum){suppressed.push({nodeId:item.node.id,category:candidate.category,reason:'below_minimum_severity'});continue;}
+        if(SEVERITY_RANK[candidate.severity]<item.minimum){suppressed.push({nodeId:item.node.id,category:candidate.category,reason:'below_minimum_severity'});continue;}
         accepted.set(item.node.id,[...(accepted.get(item.node.id)??[]),candidate]);
       }
     });

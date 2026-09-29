@@ -1,10 +1,10 @@
 import { expect,it } from 'vitest';
-import { AnyReviewResultSchema,ReviewResultSchema,RunnerResultSchema,candidateDigest,reviewResultDigest,runnerResultDigest,validateRunnerResult } from './src/index.js';
+import { AnyReviewResultSchema,ReviewResultSchema,RunnerResultSchema,candidateDigest,reviewResultDigest,runnerResultDigest,validateRunnerResult,DEFAULT_REVIEW_SCOPE } from './src/index.js';
 import type { ContentNode,EvidenceRecord,ReviewSnapshot,RunnerResult } from './src/index.js';
 
 const headSha='b'.repeat(40);
 const profile={provider:'ollama' as const,model:'fixture',credentialRef:null,maxInputTokens:12000,maxOutputTokens:4000,evaluatedLanguages:['en']};
-const snapshot:ReviewSnapshot={version:1,organizationId:'org',repositoryId:'repo',installationId:7,owner:'acme',repository:'site',pullNumber:1,baseSha:'a'.repeat(40),headSha,configSha:'c'.repeat(40),configHash:'config',executionMode:'runner',retentionMode:'ephemeral',reviewer:profile,verifier:profile,language:'en',allowUnevaluatedLanguage:false};
+const snapshot:ReviewSnapshot={version:1,organizationId:'org',repositoryId:'repo',installationId:7,owner:'acme',repository:'site',pullNumber:1,baseSha:'a'.repeat(40),headSha,configSha:'c'.repeat(40),configHash:'config',executionMode:'runner',retentionMode:'ephemeral',reviewer:profile,verifier:profile,language:'en',allowUnevaluatedLanguage:false,review:DEFAULT_REVIEW_SCOPE};
 const node:ContentNode={id:'node-1',repositoryId:'repo',commitSha:headSha,filePath:'app/page.tsx',blobSha:'d'.repeat(40),parser:'babel',parserVersion:'1',startLine:1,endLine:1,startOffset:0,endOffset:44,text:'Unlock unprecedented potential with our tool',normalizedText:'unlock unprecedented potential with our tool',kind:'heading',sourceKind:'jsx_text',dynamic:false,visibilityConfidence:1,placeholders:[],stableKey:'stable-1',mappingVersion:1,segments:[],extractionConfigHash:'config-hash',suggestionSafe:true};
 const evidence:EvidenceRecord={id:'evidence-1',type:'repo_content',description:'Existing headings are capability focused',revision:headSha,contentHash:'hash-1',nodeId:'node-1',quote:'Unlock unprecedented potential'};
 const candidate={nodeId:'node-1',category:'ai_like_generic' as const,severity:'minor' as const,confidence:0.9,exactText:'Unlock unprecedented potential',explanation:'Broad promotional wording',evidence:[{id:'evidence-1',quote:null}],replacement:null,requiresVerification:true};

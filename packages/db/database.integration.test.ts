@@ -1,4 +1,5 @@
 import { randomUUID,randomInt,randomBytes } from 'node:crypto';
+import { DEFAULT_REVIEW_SCOPE } from '@humanize/domain';
 import { beforeAll,afterAll,expect,it } from 'vitest';
 import { Database,migrate,EncryptedSecretStore,RunStore } from './src/index.js';
 import { organizations,installations,repositories,reviewRuns } from './src/schema.js';
@@ -40,7 +41,7 @@ it('stores encrypted secrets with tenant separation and revocation',async()=>{
 });
 it('deduplicates runs and rejects stale state transitions',async()=>{
   const profile={provider:'ollama' as const,model:'fixture',credentialRef:null,maxInputTokens:12000,maxOutputTokens:4000,evaluatedLanguages:['en']};
-  const snapshot:ReviewSnapshot={version:1,organizationId:org,repositoryId:repo,installationId:installation,owner:'fixture',repository:'fixture',pullNumber:1,baseSha:'a'.repeat(40),headSha:'b'.repeat(40),configSha:'a'.repeat(40),configHash:'config',executionMode:'runner',retentionMode:'ephemeral',reviewer:profile,verifier:profile,language:'en',allowUnevaluatedLanguage:false};
+  const snapshot:ReviewSnapshot={version:1,organizationId:org,repositoryId:repo,installationId:installation,owner:'fixture',repository:'fixture',pullNumber:1,baseSha:'a'.repeat(40),headSha:'b'.repeat(40),configSha:'a'.repeat(40),configHash:'config',executionMode:'runner',retentionMode:'ephemeral',reviewer:profile,verifier:profile,language:'en',allowUnevaluatedLanguage:false,review:DEFAULT_REVIEW_SCOPE};
   const store=new RunStore(db);const ids=await Promise.all([store.create(snapshot,1),store.create(snapshot,1)]);expect(ids[0]).toBe(ids[1]);
   const scope={organizationId:org,repositoryId:repo,runId:ids[0]!};
   const outcomes=await Promise.allSettled([store.transition(scope,'RECEIVED','QUEUED',0),store.transition(scope,'RECEIVED','QUEUED',0)]);

@@ -7,8 +7,6 @@ import { GitHubFileSource,GitHubTokenBroker,ReviewPublisher,StaleHeadError,build
 import { createProvider } from '@humanize/providers';
 import { cipherFromEnvironment } from '@humanize/security';
 import { executeReview } from '@humanize/execution';
-import { Category } from '@humanize/domain';
-import type { CategoryName } from '@humanize/review';
 import { executeCloudReview } from './cloud-worker.js';
 import { attachSuggestions,findingsFromResult,planPublication } from '@humanize/review';
 import { handleGitHubEvent } from './handlers.js';
@@ -46,9 +44,6 @@ const deployment={bedrockRegion:process.env.HUMANIZE_BEDROCK_REGION,ollamaBaseUr
 const cloudEnabled=Boolean(cipher&&broker);
 if(!cloudEnabled)console.log(JSON.stringify({event:'worker.no_cloud_execution',
   message:'HUMANIZE_ENCRYPTION_KEYS and the GitHub App credentials are required to execute a cloud review; cloud runs are refused until both are configured.'}));
-// Every category the organisation permits was already applied to the snapshot; the executor
-// enables them all and lets the snapshot's own policy do the narrowing.
-const enabled=Object.fromEntries(Category.options.map(category=>[category,true])) as Record<CategoryName,boolean>;
 
 const swept=await publications.sweep();
 if(swept)console.log(JSON.stringify({event:'publication.swept',count:swept}));
@@ -127,7 +122,8 @@ if(cloudEnabled)await queue.work('review.cloud_execute',async payload=>{
         repositoryId:snapshot.repositoryId,runId:result.runId,headSha:snapshot.headSha,
         traceId:result.runId,idempotencyKey:`publish:${result.runId}:${snapshot.headSha}`});
     },
-    config:{enabled},
+    // What to review comes from the snapshot alone; only where to work is configured here.
+    config:{},
   });
   // A retry is signalled by throwing, so pg-boss reschedules rather than marking it done.
   if(outcome.status==='retry')throw Error(outcome.errorClass);
@@ -165,7 +161,8 @@ await queue.work('review.publish',async payload=>{
             (await config.read({installationId:snapshot.installationId,githubRepositoryId:Number(githubRepositoryId),
               owner:snapshot.owner,name:snapshot.repository,ref:snapshot.headSha,path:filePath},LIMITS.fileBytes))?.content??null)
         : {attached:0,refused:{}};
-      const plan=planPublication(findings);
+      // The inline budget the administrator and repository settled on, never the product default.
+      const plan=planPublication(findings,{maxSubjectiveInline:snapshot.review.settings.maxSubjectiveInline});
       const review=buildReview({inline:plan.inline,summary:plan.summary,diff,reviewedNodes:result.nodes.length});
       const check=buildCheck([...plan.inline,...plan.summary]);
       try{

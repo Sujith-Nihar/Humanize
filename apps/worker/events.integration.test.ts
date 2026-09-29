@@ -99,6 +99,11 @@ it('creates a review run from configuration read at the base commit, and enqueue
   // Execution and retention come from administrator policy, never from the repository file.
   expect(stored.rows[0]!.snapshot.executionMode).toBe('runner');
   expect(stored.rows[0]!.snapshot.configSha).toBe('f'.repeat(40));
+  // The review settings travel with the run: the repository's inline request and the categories
+  // the administrator permits, rather than stopping here as a digest (ADR-043).
+  const review = (stored.rows[0]!.snapshot as unknown as { review: { settings: { maxSubjectiveInline: number; categories: string[] } } }).review;
+  expect(review.settings.maxSubjectiveInline).toBe(2);
+  expect(review.settings.categories).toEqual(['ai_like_generic', 'clarity']);
 
   // A redelivery reuses the same run and does not enqueue a second review.
   const again = await handleGitHubEvent(opened, context);
@@ -136,4 +141,37 @@ it('reads administrator policy from storage, and refuses to guess when none is s
   // A policy that no longer satisfies its schema is treated as absent, never patched.
   await administration.setPolicy(organizationId, { executionMode: 'cloud' });
   expect(await handleGitHubEvent({ ...opened, occurredAt: '2026-09-18T16:10:00.000Z' }, context)).toMatchObject({ reason: 'no_organization_policy' });
+});
+
+it('reviews a draft only where policy allows it, and treats a changed override as a new run', async () => {
+  const { RunStore } = await import('@humanize/db');
+  await db.pool.query('UPDATE repositories SET enabled=true WHERE github_repository_id=$1', [githubRepositoryId]);
+  let allowDrafts = false, yaml = 'version: 1\nreview:\n  drafts: true\n';
+  const context: EventContext = {
+    db, runs: new RunStore(db), scheduler: { enqueue: async () => {} },
+    policy: async () => ({
+      retentionMode: 'ephemeral' as const, executionMode: 'runner' as const,
+      reviewer: { provider: 'ollama' as const, model: 'local', credentialRef: null }, verifier: { provider: 'ollama' as const, model: 'local', credentialRef: null },
+      allowDrafts, maxSubjectiveInline: 5, permittedCategories: ['clarity' as const], requiredBlockingRules: [],
+    }),
+    config: { read: async () => ({ content: yaml, sha: 'e'.repeat(40) }) },
+  };
+  const draft = (minute: number, head: string) => event({ action: 'synchronize', pull: { ...event().pull!, number: 11, draft: true, headSha: head },
+    occurredAt: `2026-09-19T10:${String(minute).padStart(2, '0')}:00.000Z` });
+
+  // The repository asks for drafts, but the administrator has not allowed them.
+  expect(await handleGitHubEvent(draft(0, '1'.repeat(40)), context)).toMatchObject({ action: 'ignored', reason: 'draft' });
+  // Both agree, so the draft is reviewed. allowDrafts used to have no effect at all.
+  allowDrafts = true;
+  const reviewed = await handleGitHubEvent(draft(1, '1'.repeat(40)), context);
+  expect(reviewed).toMatchObject({ action: 'review_scheduled' });
+
+  // A path override is part of what the run was asked to do, so changing only an override
+  // produces a different run rather than reusing one reviewed under other rules.
+  yaml = 'version: 1\nreview:\n  drafts: true\noverrides:\n  - paths: ["docs/**"]\n    comments:\n      minimum_severity: major\n';
+  const changed = await handleGitHubEvent(draft(2, '1'.repeat(40)), context);
+  expect(changed.action === 'review_scheduled' && changed.configHash).not.toBe(reviewed.action === 'review_scheduled' && reviewed.configHash);
+  const snapshot = await db.pool.query<{ snapshot: { review: { overrides: { paths: string[]; settings: { minimumSeverity: string } }[] } } }>(
+    'SELECT snapshot FROM review_runs WHERE id=$1', [changed.action === 'review_scheduled' ? changed.runId : '']);
+  expect(snapshot.rows[0]!.snapshot.review.overrides).toMatchObject([{ paths: ['docs/**'], settings: { minimumSeverity: 'major' } }]);
 });

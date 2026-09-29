@@ -1,22 +1,25 @@
 import { LIMITS } from '@humanize/domain';
 import type { ContentNode,ModelProvider,ReviewResult,ReviewSnapshot } from '@humanize/domain';
 import { GitRepository,classify,withWorkspace } from '@humanize/scanner';
-import type { ScanConfig } from '@humanize/scanner';
 import { extract } from '@humanize/extractors';
 import { parseFileDiff } from '@humanize/github';
 import { EphemeralContextIndex,buildContext } from '@humanize/retrieval';
 import { evaluateRules } from '@humanize/rules';
-import type { RuleConfiguration } from '@humanize/rules';
 import { reviewNodes,routeNode } from '@humanize/review';
 import { buildSuggestion } from '@humanize/suggestions';
-import type { CategoryName,NodeSignal } from '@humanize/review';
+import type { NodeSignal } from '@humanize/review';
+import { enabledCategories,settingsForPath } from '@humanize/config';
 import { snapshotDigest } from '@humanize/domain';
 
+/**
+ * Where and how large, never what. What to review — categories, severity floor, include and
+ * exclude, visible props, avoided phrases, terminology and blocking rules — comes only from the
+ * snapshot, which was fixed from administrator policy and trusted configuration when the run was
+ * created. An executor that took them from its own configuration could review differently from
+ * what the customer set, and did (ADR-043).
+ */
 export interface ExecutionConfig {
-  enabled:Readonly<Record<CategoryName,boolean>>;
-  scan?:ScanConfig;
-  rules?:RuleConfiguration;
-  minimumSeverity?:'major'|'minor'|'nit';
+  maxFileBytes?:number;
   workspaceRoot?:string;
 }
 /**
@@ -58,6 +61,11 @@ export async function executeReview(
     const changes=await repository.changes(mergeBase,snapshot.headSha);
     const changedByPath=new Map(changes.filter(change=>change.newPath).map(change=>[change.newPath!,changedLines(change.patch,change.newPath)]));
 
+    const scope=snapshot.review;
+    const settings=(path:string)=>settingsForPath(scope,path);
+    const maxFileBytes=config.maxFileBytes??LIMITS.fileBytes;
+    const scanFor=(path:string)=>{const found=settings(path);return {include:[...found.include],exclude:[...found.exclude],maxFileBytes};};
+
     const tree=await repository.tree(snapshot.headSha);
     const nodes:ContentNode[]=[];
     const sources=new Map<string,string>();
@@ -69,36 +77,47 @@ export async function executeReview(
       // Every tracked file is classified, but classification happens on the path first:
       // reading a blob in order to classify it would pull every file in the repository out
       // of the blobless clone, including the binaries the classifier is about to reject.
-      if(classify(entry,undefined,config.scan??{}).classification!=='SUPPORTED_CONTENT')continue;
+      if(classify(entry,undefined,scanFor(entry.path)).classification!=='SUPPORTED_CONTENT')continue;
       // Only now is content fetched, and `blob` applies the size cap to this one file.
-      const bytes=await repository.blob(entry.sha,config.scan?.maxFileBytes??LIMITS.fileBytes).catch(()=>undefined);
+      const bytes=await repository.blob(entry.sha,maxFileBytes).catch(()=>undefined);
       if(!bytes){diagnostics.set('FILE_UNREADABLE',(diagnostics.get('FILE_UNREADABLE')??0)+1);continue;}
       // Re-classified with content, which is what detects a binary or generated file whose
       // path looked reviewable.
-      const inventory=classify({...entry,size:bytes.byteLength},bytes,config.scan??{});
+      const inventory=classify({...entry,size:bytes.byteLength},bytes,scanFor(entry.path));
       if(inventory.classification!=='SUPPORTED_CONTENT')continue;
       inspectedFiles++;
       const text=bytes.toString('utf8');
-      const extraction=extract({repositoryId:snapshot.repositoryId,commitSha:snapshot.headSha,blobSha:entry.sha,filePath:entry.path,source:text});
+      const {visibleProps,visibleCalls}=settings(entry.path);
+      const extraction=extract({repositoryId:snapshot.repositoryId,commitSha:snapshot.headSha,blobSha:entry.sha,filePath:entry.path,source:text,
+        visibleProps:[...visibleProps],visibleCalls:[...visibleCalls]});
       if(extraction.nodes.length)sources.set(entry.path,text);
       nodes.push(...extraction.nodes);
       for(const diagnostic of extraction.diagnostics)diagnostics.set(diagnostic.code,(diagnostics.get(diagnostic.code)??0)+1);
     }
 
     const index=new EphemeralContextIndex(snapshot,nodes);
+    const rulesFor=(node:ContentNode):NodeSignal[]=>{const {avoid,terminology,blockingRules}=settings(node.filePath);return evaluateRules(node,{avoid,terminology,blockingRules}) as NodeSignal[];};
     const changed=nodes.filter(node=>{
       const lines=changedByPath.get(node.filePath);
       if(!lines)return false;
       for(let line=node.startLine;line<=node.endLine;line++)if(lines.has(line))return true;
       return false;
-    }).filter(node=>routeNode(node,{enabled:config.enabled}).eligible).slice(0,LIMITS.nodeBatch);
+    // A node is worth passing on when a model may review it, or when a rule the customer
+    // configured applies to it regardless: a blocking rule holds even on paths where every
+    // review category is switched off.
+    }).filter(node=>routeNode(node,{enabled:enabledCategories(settings(node.filePath))}).eligible
+      ||rulesFor(node).some(entry=>entry.blocking||entry.standalone===true)).slice(0,LIMITS.nodeBatch);
 
     const outcome=await reviewNodes(snapshot,changed,{
       reviewer:ports.reviewer,reviewerModel:snapshot.reviewer.model,
       verifier:ports.verifier,verifierModel:snapshot.verifier.model,
       context:async node=>(await buildContext({node,index})).evidence,
-      rules:node=>evaluateRules(node,config.rules??{}) as NodeSignal[],
-    },{enabled:config.enabled,...(config.minimumSeverity?{minimumSeverity:config.minimumSeverity}:{}),...(signal?{signal}:{})});
+      rules:rulesFor,
+    },{
+      enabled:enabledCategories(scope.settings),minimumSeverity:scope.settings.minimumSeverity,
+      scopeFor:node=>{const found=settings(node.filePath);return {enabled:enabledCategories(found),minimumSeverity:found.minimumSeverity};},
+      ...(signal?{signal}:{}),
+    });
 
     // Pipeline diagnostics (model call counts, batch fallbacks, discarded corrections) travel
     // with the result so a run records what the review actually cost.

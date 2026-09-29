@@ -1,4 +1,5 @@
 import { expect,it,vi } from 'vitest';
+import { DEFAULT_REVIEW_SCOPE } from '@humanize/domain';
 import { REVIEW_MARKER } from '@humanize/github';
 import type { ContentNode,DiffMap,ReviewSnapshot,RunnerResult } from '@humanize/domain';
 import { publishResult } from './src/publish.js';
@@ -8,7 +9,7 @@ const headSha='b'.repeat(40);
 const text='Unlock unprecedented potential with our cutting-edge platform.';
 const profile={provider:'ollama' as const,model:'fixture',credentialRef:null,maxInputTokens:12000,maxOutputTokens:4000,evaluatedLanguages:['en']};
 const snapshot:ReviewSnapshot={version:1,organizationId:'org',repositoryId:'repo',installationId:7,owner:'acme',repository:'site',pullNumber:7,
-  baseSha:'a'.repeat(40),headSha,configSha:'c'.repeat(40),configHash:'config',executionMode:'runner',retentionMode:'ephemeral',reviewer:profile,verifier:profile,language:'en',allowUnevaluatedLanguage:false};
+  baseSha:'a'.repeat(40),headSha,configSha:'c'.repeat(40),configHash:'config',executionMode:'runner',retentionMode:'ephemeral',reviewer:profile,verifier:profile,language:'en',allowUnevaluatedLanguage:false,review:DEFAULT_REVIEW_SCOPE};
 const node=(overrides:Partial<ContentNode>={}):ContentNode=>({
   id:'node-1',repositoryId:'repo',commitSha:headSha,filePath:'app/page.tsx',blobSha:'d'.repeat(40),parser:'babel',parserVersion:'1',
   startLine:12,endLine:12,startOffset:0,endOffset:text.length,text,normalizedText:text.toLowerCase(),kind:'marketing',sourceKind:'jsx_text',

@@ -10,6 +10,7 @@
     "src/**/*.ts"
   ],
   "references": [
+    { "path": "../../packages/config/tsconfig.build.json" },
     { "path": "../../packages/domain/tsconfig.build.json" },
     { "path": "../../packages/extractors/tsconfig.build.json" },
     { "path": "../../packages/github/tsconfig.build.json" },

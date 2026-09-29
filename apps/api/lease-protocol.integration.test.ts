@@ -1,4 +1,5 @@
 import { beforeAll,afterAll,expect,it,vi } from 'vitest';
+import { DEFAULT_REVIEW_SCOPE } from '@humanize/domain';
 import { randomUUID,randomInt } from 'node:crypto';
 import { Database,migrate,RunnerStore,RunStore } from '@humanize/db';
 import { RunnerClient,runLease } from '@humanize/runner';
@@ -28,7 +29,7 @@ beforeAll(async()=>{
   await db.pool.query('INSERT INTO github_installations(id,organization_id) VALUES($1,$2)',[installation,org]);
   await db.pool.query('INSERT INTO repositories(id,organization_id,installation_id,github_repository_id,owner,name,enabled) VALUES($1,$2,$3,$4,$5,$6,true)',[repo,org,installation,randomInt(1,1000000000),'acme','site']);
   const profile={provider:'ollama' as const,model:'fixture',credentialRef:null,maxInputTokens:12000,maxOutputTokens:4000,evaluatedLanguages:['en']};
-  snapshot={version:1,organizationId:org,repositoryId:repo,installationId:installation,owner:'acme',repository:'site',pullNumber:1,baseSha:'a'.repeat(40),headSha:'b'.repeat(40),configSha:'c'.repeat(40),configHash:'config',executionMode:'runner',retentionMode:'ephemeral',reviewer:profile,verifier:profile,language:'en',allowUnevaluatedLanguage:false};
+  snapshot={version:1,organizationId:org,repositoryId:repo,installationId:installation,owner:'acme',repository:'site',pullNumber:1,baseSha:'a'.repeat(40),headSha:'b'.repeat(40),configSha:'c'.repeat(40),configHash:'config',executionMode:'runner',retentionMode:'ephemeral',reviewer:profile,verifier:profile,language:'en',allowUnevaluatedLanguage:false,review:DEFAULT_REVIEW_SCOPE};
   client=new RunnerClient({controlPlaneUrl:'http://control.test/',fetch:inject});
   runnerId=await client.register((await store.enrollment(org,[repo])).token,capabilities);
 },30000);

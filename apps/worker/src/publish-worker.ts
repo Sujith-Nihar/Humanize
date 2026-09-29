@@ -1,6 +1,6 @@
 import type { PublicationStore } from '@humanize/db';
 import type { JobPayload,ReviewResult,ReviewSnapshot } from '@humanize/domain';
-import { AnyReviewResultSchema } from '@humanize/domain';
+import { AnyReviewResultSchema,ReviewSnapshotSchema } from '@humanize/domain';
 
 export interface StoredPublication { snapshot:ReviewSnapshot; result:ReviewResult; }
 export type PublishOutcome=
@@ -32,7 +32,9 @@ export async function publishReview(payload:JobPayload,ports:PublishPorts):Promi
     const value=held.payload as {snapshot:ReviewSnapshot;result:unknown};
     // Either envelope publishes identically: a leased result carries its lease identity, a
     // cloud result has none, and neither fact matters once the result has been accepted.
-    stored={snapshot:value.snapshot,result:AnyReviewResultSchema.parse(value.result)};
+    // Both halves are parsed. The snapshot is JSONB written earlier, possibly by an older build, and
+    // parsing is what gives it the review settings it was created without (ADR-043).
+    stored={snapshot:ReviewSnapshotSchema.parse(value.snapshot),result:AnyReviewResultSchema.parse(value.result)};
   }catch{
     // A payload that cannot be parsed will never publish, so it is content with no purpose.
     await ports.publications.discard(payload.organizationId,runId);

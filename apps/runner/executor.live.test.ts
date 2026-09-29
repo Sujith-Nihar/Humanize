@@ -4,20 +4,18 @@ import { mkdtemp,rm,writeFile,readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import { Category } from '@humanize/domain';
+import {DEFAULT_REVIEW_SCOPE } from '@humanize/domain';
 import type { ReviewSnapshot } from '@humanize/domain';
 import { OllamaProvider } from '@humanize/providers';
 import { GitRepository } from '@humanize/scanner';
 import { executeReview } from './src/executor.js';
 import type { Lease,LeaseCredential } from './src/client.js';
-import type { CategoryName } from '@humanize/review';
 
 const baseUrl=process.env.HUMANIZE_OLLAMA_BASE_URL;
 const model=process.env.HUMANIZE_OLLAMA_MODEL;
 if(!baseUrl||!model)throw Error('Set HUMANIZE_OLLAMA_BASE_URL and HUMANIZE_OLLAMA_MODEL; a live test is never silently skipped.');
 
 const run=promisify(execFile);
-const enabled=Object.fromEntries(Category.options.map(c=>[c,true])) as Record<CategoryName,boolean>;
 let origin='',baseSha='',headSha='',workspaceRoot='';
 
 beforeAll(async()=>{
@@ -38,7 +36,7 @@ afterAll(async()=>{await rm(origin,{recursive:true,force:true});await rm(workspa
 it('reviews a private repository end to end with a local model only', async () => {
   const profile={provider:'ollama' as const,model,credentialRef:null,maxInputTokens:12000,maxOutputTokens:4000,evaluatedLanguages:['en']};
   const snapshot:ReviewSnapshot={version:1,organizationId:'org',repositoryId:'repo',installationId:7,owner:'acme',repository:'site',pullNumber:1,
-    baseSha,headSha,configSha:'c'.repeat(40),configHash:'config',executionMode:'runner',retentionMode:'ephemeral',reviewer:profile,verifier:profile,language:'en',allowUnevaluatedLanguage:false};
+    baseSha,headSha,configSha:'c'.repeat(40),configHash:'config',executionMode:'runner',retentionMode:'ephemeral',reviewer:profile,verifier:profile,language:'en',allowUnevaluatedLanguage:false,review:DEFAULT_REVIEW_SCOPE};
   const lease:Lease={leaseId:'11111111-1111-4111-8111-111111111111',fence:1,runId:'22222222-2222-4222-8222-222222222222',expiresAt:new Date(Date.now()+120000).toISOString(),expiresInMs:120000,snapshot};
   const credential:LeaseCredential={token:'ghs_fixture',expiresAt:new Date(Date.now()+3600000).toISOString(),repository:{owner:'acme',name:'site'},headSha,runId:lease.runId};
 
@@ -49,7 +47,7 @@ it('reviews a private repository end to end with a local model only', async () =
     return GitRepository.forFixture(gitDir,workspace as never);
   }});
   try{
-    const report=await executeReview(lease,credential,{provider:new OllamaProvider(baseUrl,true)},{enabled,workspaceRoot});
+    const report=await executeReview(lease,credential,{provider:new OllamaProvider(baseUrl,true)},{workspaceRoot});
     console.log('LIVE REVIEW =>',JSON.stringify({
       inspectedFiles:report.inspectedFiles,extractedNodes:report.extractedNodes,changedNodes:report.changedNodes,
       findings:report.result.candidates.map(c=>({category:c.category,quoted:c.exactText,explanation:c.explanation})),

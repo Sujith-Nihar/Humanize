@@ -1,7 +1,7 @@
 import { GitHubEventSchema } from '@humanize/domain';
 import type { GitHubEvent,JobPayload,ReviewSnapshot } from '@humanize/domain';
 import type { Database,RunStore } from '@humanize/db';
-import { CONFIG_PATH,OrganizationPolicySchema,loadRepositoryConfig,resolveConfiguration } from '@humanize/config';
+import { CONFIG_PATH,OrganizationPolicySchema,loadRepositoryConfig,resolveConfiguration,resolveReviewScope } from '@humanize/config';
 import type { OrganizationPolicy } from '@humanize/config';
 import type { AdministrationStore } from '@humanize/db';
 import { fingerprint } from '@humanize/shared';
@@ -69,7 +69,10 @@ export async function handleGitHubEvent(raw:GitHubEvent,context:EventContext):Pr
   // A repository nobody enabled is recorded but never reviewed.
   if(!record.enabled)return {action:'ignored',reason:'repository_disabled'};
   if(!REVIEWABLE.has(event.action))return {action:'ignored',reason:`action_${event.action}`};
-  if(event.pull.draft&&event.action!=='ready_for_review')return {action:'ignored',reason:'draft'};
+  // Whether a draft is reviewed is a policy decision, so without the means to read policy a draft
+  // is skipped exactly as before; with them, the decision waits until policy is resolved below.
+  const canResolve=Boolean(context.runs&&context.config&&context.scheduler&&(context.policy||context.administration));
+  if(event.pull.draft&&event.action!=='ready_for_review'&&!canResolve)return {action:'ignored',reason:'draft'};
 
   // The generation advances whenever the head moves, so an earlier run for a superseded head
   // can be recognised as stale rather than racing the newer one.
@@ -99,19 +102,27 @@ export async function handleGitHubEvent(raw:GitHubEvent,context:EventContext):Pr
   const policy=await resolvePolicy(record.organization_id,context);
   if(!policy)return {action:'ignored',reason:'no_organization_policy'};
   const effective=resolveConfiguration({policy,repository:loaded.config});
+  // Drafts are reviewed only where both the administrator allows it and the repository asks for it.
+  if(event.pull.draft&&event.action!=='ready_for_review'&&!effective.drafts)return {action:'ignored',reason:'draft'};
+  // Resolved once here and carried in the snapshot, so the executor and the publisher apply the
+  // same settings rather than each guessing (ADR-043).
+  const review=resolveReviewScope({policy,repository:loaded.config});
+  // The run's identity covers every setting, including path overrides, so changing any of them
+  // is a new run rather than a silent reuse of one reviewed under different rules.
+  const configHash=fingerprint(['review-configuration',effective.digest,review]);
 
   const snapshot:ReviewSnapshot={
     version:1,organizationId:record.organization_id,repositoryId:record.id,installationId:event.installationId,
     owner:event.repository.owner,repository:event.repository.name,pullNumber:event.pull.number,
     baseSha:event.pull.baseSha,headSha:updated.head_sha,
-    configSha:file?.sha??'0'.repeat(40),configHash:effective.digest,
+    configSha:file?.sha??'0'.repeat(40),configHash,
     executionMode:effective.executionMode,retentionMode:effective.retentionMode,
     // The credential reference comes from administrator policy. A cloud review with no
     // credential configured must not silently fall through to a local model, so the snapshot
     // carries whatever policy chose and dispatch refuses a cloud run that names nothing.
     reviewer:{...effective.reviewer,maxInputTokens:12000,maxOutputTokens:4000,evaluatedLanguages:['en']},
     verifier:{...effective.verifier,maxInputTokens:12000,maxOutputTokens:4000,evaluatedLanguages:['en']},
-    language:'en',allowUnevaluatedLanguage:false,
+    language:'en',allowUnevaluatedLanguage:false,review,
   };
   // Run creation is keyed by head and configuration, so a redelivery reuses the same run.
   const runId=await context.runs.create(snapshot,updated.generation);
@@ -119,7 +130,7 @@ export async function handleGitHubEvent(raw:GitHubEvent,context:EventContext):Pr
     version:1,organizationId:record.organization_id,repositoryId:record.id,runId,headSha:updated.head_sha,
     traceId:runId,idempotencyKey:fingerprint(['review',runId,updated.generation]),
   });
-  return {...scheduled,runId,configHash:effective.digest};
+  return {...scheduled,runId,configHash};
 }
 
 /**

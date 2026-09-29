@@ -4,14 +4,12 @@ import { mkdtemp,rm,writeFile,readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import { Category,validateRunnerResult } from '@humanize/domain';
+import {validateRunnerResult,DEFAULT_REVIEW_SCOPE } from '@humanize/domain';
 import type { ModelProvider,ReviewSnapshot } from '@humanize/domain';
 import { executeReview } from './src/executor.js';
 import type { Lease,LeaseCredential } from './src/client.js';
-import type { CategoryName } from '@humanize/review';
 
 const run=promisify(execFile);
-const enabled=Object.fromEntries(Category.options.map(c=>[c,true])) as Record<CategoryName,boolean>;
 let origin='',baseSha='',headSha='',workspaceRoot='';
 
 // A real local repository: the executor is only meaningful against actual Git objects.
@@ -34,7 +32,7 @@ afterAll(async()=>{await rm(origin,{recursive:true,force:true});await rm(workspa
 
 const profile={provider:'ollama' as const,model:'fixture',credentialRef:null,maxInputTokens:12000,maxOutputTokens:4000,evaluatedLanguages:['en']};
 const snapshot=():ReviewSnapshot=>({version:1,organizationId:'org',repositoryId:'repo',installationId:7,owner:'acme',repository:'site',pullNumber:1,
-  baseSha,headSha,configSha:'c'.repeat(40),configHash:'config',executionMode:'runner',retentionMode:'ephemeral',reviewer:profile,verifier:profile,language:'en',allowUnevaluatedLanguage:false});
+  baseSha,headSha,configSha:'c'.repeat(40),configHash:'config',executionMode:'runner',retentionMode:'ephemeral',reviewer:profile,verifier:profile,language:'en',allowUnevaluatedLanguage:false,review:DEFAULT_REVIEW_SCOPE});
 const lease=():Lease=>({leaseId:'11111111-1111-4111-8111-111111111111',fence:1,runId:'22222222-2222-4222-8222-222222222222',expiresAt:new Date(Date.now()+120000).toISOString(),expiresInMs:120000,snapshot:snapshot()});
 const credential=():LeaseCredential=>({token:'ghs_fixture',expiresAt:new Date(Date.now()+3600000).toISOString(),repository:{owner:'acme',name:'site'},headSha,runId:'22222222-2222-4222-8222-222222222222'});
 const hosts:string[]=[];
@@ -62,7 +60,7 @@ const fromLocalOrigin=async(fn:()=>Promise<unknown>,source=origin)=>{
 };
 
 it('reviews only what the pull request changed, and leaves no workspace behind', async () => {
-  const report=await fromLocalOrigin(async()=>executeReview(lease(),credential(),{provider:provider([])},{enabled,workspaceRoot})) as Awaited<ReturnType<typeof executeReview>>;
+  const report=await fromLocalOrigin(async()=>executeReview(lease(),credential(),{provider:provider([])},{workspaceRoot})) as Awaited<ReturnType<typeof executeReview>>;
   expect(report.inspectedFiles).toBeGreaterThan(0);
   expect(report.changedNodes).toBe(1);
   expect(report.result.nodes[0]!.text).toContain('Unlock unprecedented potential');
@@ -74,7 +72,7 @@ it('reviews only what the pull request changed, and leaves no workspace behind',
 
 it('never contacts a host other than the configured local model', async () => {
   hosts.length=0;
-  await fromLocalOrigin(async()=>executeReview(lease(),credential(),{provider:provider([])},{enabled,workspaceRoot}));
+  await fromLocalOrigin(async()=>executeReview(lease(),credential(),{provider:provider([])},{workspaceRoot}));
   expect(hosts.every(host=>host.startsWith('127.0.0.1'))).toBe(true);
   for(const host of ['api.openai.com','generativelanguage.googleapis.com','openrouter.ai'])expect(hosts).not.toContain(host);
 }, 120000);
@@ -82,13 +80,13 @@ it('never contacts a host other than the configured local model', async () => {
 it('refuses a job configured to use a cloud model', async () => {
   const cloud=lease();
   const job={...cloud,snapshot:{...cloud.snapshot,reviewer:{...profile,provider:'openai' as const}}};
-  await expect(executeReview(job as Lease,credential(),{provider:provider([])},{enabled,workspaceRoot})).rejects.toThrow('CLOUD_MODEL_IN_PRIVATE_JOB');
+  await expect(executeReview(job as Lease,credential(),{provider:provider([])},{workspaceRoot})).rejects.toThrow('CLOUD_MODEL_IN_PRIVATE_JOB');
   expect(await readdir(workspaceRoot)).toEqual([]);
 }, 120000);
 
 it('records a model failure as a diagnostic instead of losing the whole review', async () => {
   const failing={id:'ollama',testConnection:vi.fn(),generateStructured:vi.fn(async()=>{throw Error('model exploded');})} as unknown as ModelProvider;
-  const report=await fromLocalOrigin(async()=>executeReview(lease(),credential(),{provider:failing},{enabled,workspaceRoot})) as Awaited<ReturnType<typeof executeReview>>;
+  const report=await fromLocalOrigin(async()=>executeReview(lease(),credential(),{provider:failing},{workspaceRoot})) as Awaited<ReturnType<typeof executeReview>>;
   expect(report.result.diagnostics.some(d=>d.code.startsWith('REVIEW_FAILED'))).toBe(true);
   // Deterministic findings need no model, so a total model failure still reports what is
   // objectively countable in the content rather than reviewing nothing at all (ADR-037).
@@ -101,7 +99,7 @@ it('destroys the workspace when acquisition itself fails', async () => {
   const original=scanner.GitRepository.acquire;
   Object.defineProperty(scanner.GitRepository,'acquire',{configurable:true,value:async()=>{throw Error('clone refused');}});
   try{
-    await expect(executeReview(lease(),credential(),{provider:provider([])},{enabled,workspaceRoot})).rejects.toThrow('clone refused');
+    await expect(executeReview(lease(),credential(),{provider:provider([])},{workspaceRoot})).rejects.toThrow('clone refused');
     expect(await readdir(workspaceRoot)).toEqual([]);
   }finally{Object.defineProperty(scanner.GitRepository,'acquire',{configurable:true,value:original});}
 }, 120000);
@@ -135,7 +133,7 @@ it('sends the unchanged content its evidence cites, so a context-backed finding 
     })} as unknown as ModelProvider;
 
     const job={...lease(),snapshot:{...snapshot(),baseSha:base,headSha:head}};
-    const report=await fromLocalOrigin(async()=>executeReview(job,{...credential(),headSha:head},{provider:citing},{enabled,workspaceRoot}),repo) as Awaited<ReturnType<typeof executeReview>>;
+    const report=await fromLocalOrigin(async()=>executeReview(job,{...credential(),headSha:head},{provider:citing},{workspaceRoot}),repo) as Awaited<ReturnType<typeof executeReview>>;
 
     expect(report.result.candidates).toHaveLength(1);
     expect(report.result.nodes.map(node=>node.startLine)).toEqual([5]);
@@ -144,5 +142,57 @@ it('sends the unchanged content its evidence cites, so a context-backed finding 
     expect(validateRunnerResult(report.result,job.snapshot)).toEqual([]);
     // Without it, exactly the old failure returns.
     expect(validateRunnerResult({...report.result,contextNodes:[]},job.snapshot)).toEqual(['EVIDENCE_NODE_UNKNOWN']);
+  }finally{await rm(repo,{recursive:true,force:true});}
+}, 120000);
+
+it('reviews with the settings the snapshot carries, not with defaults of its own', async () => {
+  // The defect this guards against: .humanize.yml and policy settings were resolved and then
+  // dropped, so every executor reviewed every category with no rules configured.
+  const repo=await mkdtemp(join(tmpdir(),'humanize-settings-'));
+  const git=(...args:string[])=>run('git',['-C',repo,...args]);
+  try{
+    await run('git',['init','-q','-b','main',repo]);
+    await git('config','user.email','fixture@example.com');await git('config','user.name','Fixture');
+    await run('mkdir',['-p',join(repo,'docs'),join(repo,'legacy'),join(repo,'app')]);
+    await writeFile(join(repo,'docs','guide.md'),'Placeholder.\n');
+    await writeFile(join(repo,'legacy','old.md'),'Placeholder.\n');
+    await writeFile(join(repo,'app','page.tsx'),'export const A=()=><Card headline="Old"/>;\n');
+    await git('add','.');await git('commit','-qm','base');
+    const base=(await git('rev-parse','HEAD')).stdout.trim();
+    await writeFile(join(repo,'docs','guide.md'),'Our service is 100% secure for everyone who signs up.\n');
+    await writeFile(join(repo,'legacy','old.md'),'Unlock unprecedented potential with our legacy platform today.\n');
+    await writeFile(join(repo,'app','page.tsx'),'export const A=()=><Card headline="Brand new headline for the launch"/>;\n');
+    await git('add','.');await git('commit','-qm','head');
+    const head=(await git('rev-parse','HEAD')).stdout.trim();
+
+    const asked:string[]=[];
+    const recording={id:'ollama',testConnection:vi.fn(),generateStructured:vi.fn(async(args:{system:string;input:string})=>{
+      asked.push(args.input);
+      return {data:args.system.startsWith('You review')?{candidates:[],searches:[]}:{results:[]},provider:'ollama',model:'fixture',durationMs:1};
+    })} as unknown as ModelProvider;
+    const execute=async(review:ReviewSnapshot['review'])=>{
+      const job={...lease(),snapshot:{...snapshot(),baseSha:base,headSha:head,review}};
+      return await fromLocalOrigin(async()=>executeReview(job,{...credential(),headSha:head},{provider:recording},{workspaceRoot}),repo) as Awaited<ReturnType<typeof executeReview>>;
+    };
+    const files=(report:Awaited<ReturnType<typeof executeReview>>)=>[...new Set(report.result.nodes.map(node=>node.filePath))].sort();
+
+    // Defaults: everything changed is reviewed, and the custom prop is not a visible string.
+    const defaults=await execute(DEFAULT_REVIEW_SCOPE);
+    expect(files(defaults)).toEqual(['docs/guide.md','legacy/old.md']);
+    expect(defaults.result.candidates).toEqual([]);
+
+    // Configured: an excluded path, a custom visible prop, a blocking rule, and a path where
+    // every review category is switched off.
+    asked.length=0;
+    const settings={...DEFAULT_REVIEW_SCOPE.settings,exclude:[...DEFAULT_REVIEW_SCOPE.settings.exclude,'legacy/**'],
+      visibleProps:['headline'],blockingRules:[{type:'forbidden_phrase' as const,phrase:'100% secure'}]};
+    const configured=await execute({settings,overrides:[{paths:['docs/**'],settings:{...settings,categories:[]}}]});
+    expect(files(configured)).toEqual(['app/page.tsx','docs/guide.md']);
+    expect(configured.result.nodes.find(node=>node.filePath==='app/page.tsx')!.text).toBe('Brand new headline for the launch');
+    // The blocking rule holds on docs/ although no model may review it there...
+    expect(configured.result.candidates.map(candidate=>candidate.exactText)).toEqual(['100% secure']);
+    // ...and the model was never shown that file.
+    expect(asked.some(input=>input.includes('100% secure'))).toBe(false);
+    expect(asked.some(input=>input.includes('Brand new headline'))).toBe(true);
   }finally{await rm(repo,{recursive:true,force:true});}
 }, 120000);

@@ -1,4 +1,5 @@
 import { expect,it,vi } from 'vitest';
+import { DEFAULT_REVIEW_SCOPE } from '@humanize/domain';
 import { dispatchReview } from './src/review-worker.js';
 import type { ReviewRunRecord } from './src/review-worker.js';
 import type { JobPayload, ReviewSnapshot } from '@humanize/domain';
@@ -9,7 +10,7 @@ const snapshot=(executionMode:'runner'|'cloud'):ReviewSnapshot=>({
   executionMode,retentionMode:'ephemeral',
   reviewer:{provider:'ollama',model:'m',credentialRef:null,maxInputTokens:12000,maxOutputTokens:4000,evaluatedLanguages:['en']},
   verifier:{provider:'ollama',model:'m',credentialRef:null,maxInputTokens:12000,maxOutputTokens:4000,evaluatedLanguages:['en']},
-  language:'en',allowUnevaluatedLanguage:false,
+  language:'en',allowUnevaluatedLanguage:false,review:DEFAULT_REVIEW_SCOPE,
 });
 const payload:JobPayload={version:1,organizationId:'org',repositoryId:'repo',runId:'run',traceId:'t',idempotencyKey:'k'};
 const record=(state:string,mode:'runner'|'cloud'='runner',hosted=false):ReviewRunRecord=>{

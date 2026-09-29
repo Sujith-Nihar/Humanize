@@ -2,7 +2,7 @@ import { beforeAll,afterAll,it,expect } from 'vitest';
 import { randomUUID,randomInt } from 'node:crypto';
 import { opaqueToken } from '@humanize/security';
 import { Database,migrate,RunnerStore,RunStore } from './src/index.js';
-import { snapshotDigest } from '@humanize/domain';
+import { snapshotDigest,DEFAULT_REVIEW_SCOPE } from '@humanize/domain';
 import type { ReviewSnapshot,RunnerResult } from '@humanize/domain';
 import type { Lease } from './src/runners.js';
 const url=process.env.HUMANIZE_TEST_DATABASE_URL;if(!url||!new URL(url).pathname.endsWith('/humanize_test'))throw Error('Disposable test database required');
@@ -21,7 +21,7 @@ beforeAll(async()=>{
   await db.pool.query('INSERT INTO github_installations(id,organization_id) VALUES($1,$2)',[otherInstallation,otherOrg]);
   await db.pool.query('INSERT INTO repositories(id,organization_id,installation_id,github_repository_id,owner,name,enabled) VALUES($1,$2,$3,$4,$5,$6,true)',[otherRepo,otherOrg,otherInstallation,randomInt(1,1000000000),'fixture','other']);
   const profile={provider:'ollama' as const,model:'fixture',credentialRef:null,maxInputTokens:12000,maxOutputTokens:4000,evaluatedLanguages:['en']};
-  snapshot={version:1,organizationId:org,repositoryId:repo,installationId:installation,owner:'fixture',repository:'fixture',pullNumber:1,baseSha:'a'.repeat(40),headSha:'b'.repeat(40),configSha:'a'.repeat(40),configHash:'config',executionMode:'runner',retentionMode:'ephemeral',reviewer:profile,verifier:profile,language:'en',allowUnevaluatedLanguage:false};
+  snapshot={version:1,organizationId:org,repositoryId:repo,installationId:installation,owner:'fixture',repository:'fixture',pullNumber:1,baseSha:'a'.repeat(40),headSha:'b'.repeat(40),configSha:'a'.repeat(40),configHash:'config',executionMode:'runner',retentionMode:'ephemeral',reviewer:profile,verifier:profile,language:'en',allowUnevaluatedLanguage:false,review:DEFAULT_REVIEW_SCOPE};
   runId=await new RunStore(db).create(snapshot,1);
 });
 afterAll(async()=>db.close());

@@ -1,12 +1,12 @@
 import { expect,it,vi } from 'vitest';
-import { Category,LIMITS,candidateDigest } from '@humanize/domain';
+import { Category,LIMITS,candidateDigest,DEFAULT_REVIEW_SCOPE } from '@humanize/domain';
 import type { CandidateFinding,ContentNode,EvidenceRecord,ModelProvider,ReviewSnapshot } from '@humanize/domain';
 import { REVIEWER_SYSTEM,VERIFIER_SYSTEM,authorFacing,fence,packBatches,reviewNodes,reviewerInput,verifierInput } from './src/index.js';
 import type { CategoryName,NodeSignal } from './src/index.js';
 
 const headSha='b'.repeat(40);
 const profile={provider:'ollama' as const,model:'fixture',credentialRef:null,maxInputTokens:12000,maxOutputTokens:4000,evaluatedLanguages:['en']};
-const snapshot:ReviewSnapshot={version:1,organizationId:'org',repositoryId:'repo',installationId:7,owner:'acme',repository:'site',pullNumber:1,baseSha:'a'.repeat(40),headSha,configSha:'c'.repeat(40),configHash:'config',executionMode:'runner',retentionMode:'ephemeral',reviewer:profile,verifier:profile,language:'en',allowUnevaluatedLanguage:false};
+const snapshot:ReviewSnapshot={version:1,organizationId:'org',repositoryId:'repo',installationId:7,owner:'acme',repository:'site',pullNumber:1,baseSha:'a'.repeat(40),headSha,configSha:'c'.repeat(40),configHash:'config',executionMode:'runner',retentionMode:'ephemeral',reviewer:profile,verifier:profile,language:'en',allowUnevaluatedLanguage:false,review:DEFAULT_REVIEW_SCOPE};
 const enabled=Object.fromEntries(Category.options.map(c=>[c,true])) as Record<CategoryName,boolean>;
 const text='Unlock unprecedented potential with our cutting-edge platform for modern teams everywhere.';
 const node=(overrides:Partial<ContentNode>={}):ContentNode=>({
