@@ -12,8 +12,11 @@ const snapshot=(executionMode:'runner'|'cloud'):ReviewSnapshot=>({
   language:'en',allowUnevaluatedLanguage:false,
 });
 const payload:JobPayload={version:1,organizationId:'org',repositoryId:'repo',runId:'run',traceId:'t',idempotencyKey:'k'};
-const record=(state:string,mode:'runner'|'cloud'='runner'):ReviewRunRecord=>
-  ({organizationId:'org',repositoryId:'repo',runId:'run',state,attempt:0,snapshot:snapshot(mode)});
+const record=(state:string,mode:'runner'|'cloud'='runner',hosted=false):ReviewRunRecord=>{
+  const base=snapshot(mode);
+  const model=hosted?{provider:'bedrock' as const,model:'m',credentialRef:'11111111-1111-4111-8111-111111111111',maxInputTokens:12000,maxOutputTokens:4000,evaluatedLanguages:['en' as const]}:base.reviewer;
+  return {organizationId:'org',repositoryId:'repo',runId:'run',state,attempt:0,snapshot:{...base,reviewer:model,verifier:model}};
+};
 
 it('offers a runner job as a lease and moves the run to QUEUED',async()=>{
   const runners={enqueue:vi.fn(async()=>{})},queued=vi.fn(async()=>{});
@@ -24,12 +27,49 @@ it('offers a runner job as a lease and moves the run to QUEUED',async()=>{
 });
 
 it('never routes a cloud run to the local executor',async()=>{
-  // INV-007: private execution and cloud execution must never be silently interchanged, and
-  // no cloud executor exists, so this reports unavailable rather than running it locally.
+  // INV-007: private execution and cloud execution must never be silently interchanged, so a
+  // cloud run with no cloud executor configured is reported rather than run on a runner.
   const runners={enqueue:vi.fn(async()=>{})};
-  const outcome=await dispatchReview(payload,{run:async()=>record('RECEIVED','cloud'),runners,queued:async()=>{}});
+  const outcome=await dispatchReview(payload,{run:async()=>record('RECEIVED','cloud',true),runners,queued:async()=>{}});
   expect(outcome).toEqual({status:'skipped',reason:'cloud_execution_unavailable'});
   expect(runners.enqueue).not.toHaveBeenCalled();
+});
+
+it('never routes a runner run to the cloud executor',async()=>{
+  // The converse of INV-007, and the one that would leak content: a private review must not
+  // reach a hosted model because a cloud executor happens to be configured.
+  const cloud={enqueue:vi.fn(async()=>{})},runners={enqueue:vi.fn(async()=>{})};
+  const outcome=await dispatchReview(payload,{run:async()=>record('RECEIVED','runner'),runners,cloud,queued:async()=>{}});
+  expect(outcome).toEqual({status:'leased',runId:'run'});
+  expect(cloud.enqueue).not.toHaveBeenCalled();
+});
+
+it('queues a cloud run for the cloud executor',async()=>{
+  const cloud={enqueue:vi.fn(async()=>{})},runners={enqueue:vi.fn(async()=>{})},queued=vi.fn(async()=>{});
+  const outcome=await dispatchReview(payload,{run:async()=>record('RECEIVED','cloud',true),runners,cloud,queued});
+  expect(outcome).toEqual({status:'cloud',runId:'run'});
+  expect(cloud.enqueue).toHaveBeenCalledOnce();
+  expect(runners.enqueue).not.toHaveBeenCalled();
+  expect(queued).toHaveBeenCalledOnce();
+});
+
+it('refuses a hosted cloud run that names no credential',async()=>{
+  // Rather than falling back to a local model, which is a provider the administrator did
+  // not choose for this organisation.
+  const cloud={enqueue:vi.fn(async()=>{})};
+  const uncredentialed=record('RECEIVED','cloud',true);
+  const snap=uncredentialed.snapshot as ReviewSnapshot;
+  const run=async()=>({...uncredentialed,snapshot:{...snap,reviewer:{...snap.reviewer,credentialRef:null},verifier:{...snap.verifier,credentialRef:null}}});
+  const outcome=await dispatchReview(payload,{run,runners:{enqueue:async()=>{}},cloud,queued:async()=>{}});
+  expect(outcome).toEqual({status:'skipped',reason:'no_cloud_credential'});
+  expect(cloud.enqueue).not.toHaveBeenCalled();
+});
+
+it('does not re-queue a cloud run a redelivery already dispatched',async()=>{
+  const cloud={enqueue:vi.fn(async()=>{})};
+  const outcome=await dispatchReview(payload,{run:async()=>record('QUEUED','cloud',true),runners:{enqueue:async()=>{}},cloud,queued:async()=>{}});
+  expect(outcome).toEqual({status:'skipped',reason:'already_dispatched'});
+  expect(cloud.enqueue).not.toHaveBeenCalled();
 });
 
 it('does not advance a run a redelivery already dispatched',async()=>{
