@@ -1,8 +1,8 @@
 import type { PublicationStore } from '@humanize/db';
-import type { JobPayload,ReviewSnapshot,RunnerResult } from '@humanize/domain';
-import { RunnerResultSchema } from '@humanize/domain';
+import type { JobPayload,ReviewResult,ReviewSnapshot } from '@humanize/domain';
+import { AnyReviewResultSchema } from '@humanize/domain';
 
-export interface StoredPublication { snapshot:ReviewSnapshot; result:RunnerResult; }
+export interface StoredPublication { snapshot:ReviewSnapshot; result:ReviewResult; }
 export type PublishOutcome=
   |{status:'published';reviewId:number|null}
   |{status:'skipped';reason:'no_payload'|'stale_head'|'invalid_payload'}
@@ -30,7 +30,9 @@ export async function publishReview(payload:JobPayload,ports:PublishPorts):Promi
   let stored:StoredPublication;
   try{
     const value=held.payload as {snapshot:ReviewSnapshot;result:unknown};
-    stored={snapshot:value.snapshot,result:RunnerResultSchema.parse(value.result)};
+    // Either envelope publishes identically: a leased result carries its lease identity, a
+    // cloud result has none, and neither fact matters once the result has been accepted.
+    stored={snapshot:value.snapshot,result:AnyReviewResultSchema.parse(value.result)};
   }catch{
     // A payload that cannot be parsed will never publish, so it is content with no purpose.
     await ports.publications.discard(payload.organizationId,runId);

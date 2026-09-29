@@ -1,5 +1,5 @@
 import { expect,it } from 'vitest';
-import { candidateDigest,validateRunnerResult } from './src/index.js';
+import { AnyReviewResultSchema,ReviewResultSchema,RunnerResultSchema,candidateDigest,reviewResultDigest,runnerResultDigest,validateRunnerResult } from './src/index.js';
 import type { ContentNode,EvidenceRecord,ReviewSnapshot,RunnerResult } from './src/index.js';
 
 const headSha='b'.repeat(40);
@@ -56,4 +56,26 @@ it('reports every distinct violation once, in a stable order', () => {
   };
   // Each distinct problem is named once, sorted, however many times it occurs.
   expect(validateRunnerResult(broken,snapshot)).toEqual(['CANDIDATE_TEXT_NOT_IN_NODE','DUPLICATE_NODE_IDENTITY','NODE_NOT_AT_HEAD']);
+});
+
+it('requires a lease identity from a runner and none from a cloud run', () => {
+  const { leaseId:_leaseId, fence:_fence, ...cloud } = base;
+  // The lease identity is what binds an upload to work that was handed out, so a runner
+  // cannot omit it; a result the control plane executed itself was never leased to anyone.
+  expect(RunnerResultSchema.safeParse(cloud).success).toBe(false);
+  expect(ReviewResultSchema.safeParse(cloud).success).toBe(true);
+  expect(ReviewResultSchema.safeParse(base).success).toBe(false);
+  expect(AnyReviewResultSchema.safeParse(base).success).toBe(true);
+  expect(AnyReviewResultSchema.safeParse(cloud).success).toBe(true);
+  // Validation is the same work either way: how a review was dispatched says nothing about
+  // whether its contents are internally consistent.
+  expect(validateRunnerResult(cloud,snapshot)).toEqual([]);
+  expect(validateRunnerResult({...cloud,candidates:[{...candidate,exactText:'never written'}],verification:{results:[]}},snapshot)).toEqual(['CANDIDATE_TEXT_NOT_IN_NODE']);
+});
+
+it('keeps a cloud result digest distinct from a leased one', () => {
+  const { leaseId:_leaseId, fence:_fence, ...cloud } = base;
+  // Different payload kinds, so different digest domains: neither can be replayed as the other.
+  expect(reviewResultDigest(cloud)).not.toEqual(runnerResultDigest(base));
+  expect(reviewResultDigest(cloud)).toEqual(reviewResultDigest({...cloud}));
 });

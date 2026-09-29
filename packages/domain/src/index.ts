@@ -123,12 +123,27 @@ export type GitHubEvent=z.infer<typeof GitHubEventSchema>;
 export const RunnerCapabilitiesSchema=z.object({protocolVersion:z.literal(1),schemaVersion:z.literal('humanize-runner-v1'),version:z.string().min(1).max(50),models:z.array(z.string().min(1).max(200)).max(100),labels:z.array(z.string().max(100)).max(20),localOnly:z.literal(true)}).strict();
 export const RunnerRegistrationSchema=z.object({enrollmentToken:z.string().min(32).max(200),capabilities:RunnerCapabilitiesSchema}).strict();
 export const LeaseIdentitySchema=z.object({leaseId:z.string().uuid(),fence:z.number().int().positive()}).strict();
-export const RunnerResultSchema=z.object({
-  version:z.literal(1),leaseId:z.string().uuid(),fence:z.number().int().positive(),runId:z.string().uuid(),snapshotHash:Id,
+/**
+ * What one executed review produced, whoever executed it. Validation and publication work on
+ * this shape, because nothing downstream of acceptance depends on how the work was dispatched.
+ */
+export const ReviewResultSchema=z.object({
+  version:z.literal(1),runId:z.string().uuid(),snapshotHash:Id,
   nodes:z.array(ContentNodeSchema).max(10000),candidates:z.array(CandidateSchema).max(100),evidence:z.array(EvidenceSchema).max(1000),
   verification:VerificationSchema,diagnostics:z.array(z.object({code:z.string().regex(/^[A-Z_]{1,100}$/),count:z.number().int().nonnegative()}).strict()).max(100),
 }).strict();
+export type ReviewResult=z.infer<typeof ReviewResultSchema>;
+/**
+ * A result uploaded by a runner. The lease identity is what proves this upload belongs to the
+ * work that was handed out, so it is required here and absent from a result the control plane
+ * produced itself, which was never leased to anyone.
+ */
+export const RunnerResultSchema=ReviewResultSchema.extend({
+  leaseId:z.string().uuid(),fence:z.number().int().positive(),
+}).strict();
 export type RunnerResult=z.infer<typeof RunnerResultSchema>;
+/** Either envelope, for the paths after acceptance that do not care which one arrived. */
+export const AnyReviewResultSchema=z.union([RunnerResultSchema,ReviewResultSchema]);
 export type RunnerCapabilities=z.infer<typeof RunnerCapabilitiesSchema>;
 
 export const DIGEST_VERSION = 'humanize-digest-1' as const;
@@ -140,6 +155,8 @@ export const DIGEST_VERSION = 'humanize-digest-1' as const;
 export function domainDigest(domain:string,value:unknown):string { return fingerprint([DIGEST_VERSION,domain,value]); }
 export function snapshotDigest(snapshot:unknown):string { return domainDigest('review-snapshot',ReviewSnapshotSchema.parse(snapshot)); }
 export function runnerResultDigest(result:unknown):string { return domainDigest('runner-result',RunnerResultSchema.parse(result)); }
+/** Digest of an executed review, used where a result carries no lease (a cloud run). */
+export function reviewResultDigest(result:unknown):string { return domainDigest('review-result',ReviewResultSchema.parse(result)); }
 /**
  * Deterministic identity for a candidate finding (ADR-036). The control plane recomputes it
  * from the candidate itself, so a runner cannot invent a binding between a verification
@@ -164,7 +181,7 @@ export type ResultViolation=z.infer<typeof ResultViolation>;
  *
  * Returns the distinct violations found, empty when the envelope is internally consistent.
  */
-export function validateRunnerResult(result:RunnerResult,snapshot:ReviewSnapshot):ResultViolation[] {
+export function validateRunnerResult(result:ReviewResult,snapshot:ReviewSnapshot):ResultViolation[] {
   const violations=new Set<ResultViolation>();
   const nodes=new Map<string,ContentNode>();
   for(const node of result.nodes){

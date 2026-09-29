@@ -1,14 +1,14 @@
-import type { ContentNode,ReviewSnapshot,RunnerResult,ValidatedFinding } from '@humanize/domain';
+import type { ContentNode,ReviewResult,ReviewSnapshot,ValidatedFinding } from '@humanize/domain';
 
 /**
- * Rebuilds publishable findings from an accepted runner result.
+ * Rebuilds publishable findings from an accepted result, whichever executor produced it.
  *
- * The envelope was already validated on upload, but the runner stays untrusted: a candidate is
+ * The envelope was already validated on upload, but the executor stays untrusted: a candidate is
  * reconstructed only from material the control plane received, and its quotation must still be
  * present in the node it names and that node must belong to the reviewed commit. Anything that
  * fails is dropped rather than published.
  */
-export function findingsFromResult(result:RunnerResult,snapshot:ReviewSnapshot):ValidatedFinding[] {
+export function findingsFromResult(result:ReviewResult,snapshot:ReviewSnapshot):ValidatedFinding[] {
   const nodes=new Map<string,ContentNode>(result.nodes.map(node=>[node.id,node]));
   const evidence=new Map(result.evidence.map(record=>[record.id,record]));
   const findings:ValidatedFinding[]=[];

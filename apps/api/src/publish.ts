@@ -1,14 +1,14 @@
 import { findingsFromResult,planPublication } from '@humanize/review';
 import { ReviewPublisher,StaleHeadError,buildCheck,buildReview } from '@humanize/github';
 import type { GitHubTransport,PublishOutcome } from '@humanize/github';
-import type { DiffMap,ReviewSnapshot,RunnerResult } from '@humanize/domain';
+import type { DiffMap,ReviewResult,ReviewSnapshot } from '@humanize/domain';
 
 export interface PublishPorts {
   /** A transport authorised for this installation; the control plane alone holds write access. */
   transport(snapshot:ReviewSnapshot):Promise<GitHubTransport>;
   diff(snapshot:ReviewSnapshot):Promise<DiffMap>;
 }
-export interface PublishRequest { snapshot:ReviewSnapshot; result:RunnerResult; maxSubjectiveInline?:number; }
+export interface PublishRequest { snapshot:ReviewSnapshot; result:ReviewResult; maxSubjectiveInline?:number; }
 
 /**
  * Publishes an accepted result. Only the control plane reaches GitHub: the runner holds a
