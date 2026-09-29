@@ -1,7 +1,7 @@
 # Agent handoff
 
-**Verified green on 2026-09-29** on commit 8072514: `pnpm check` 405 unit tests across 50 files,
-`pnpm build`, and 74 integration tests across 11 files from a disposable database. Two environment steps were needed first and neither indicates a code
+**Verified green on 2026-09-29** on commit ed198ac: `pnpm check` 416 unit tests across 52 files,
+`pnpm build`, and 79 integration tests across 12 files from a disposable database. Two environment steps were needed first and neither indicates a code
 problem: `node_modules` was absent, so `pnpm install --frozen-lockfile` is required, and the
 `humanize-postgres-1` container was stopped, so `docker compose up -d` is required before
 `pnpm test:integration`.
@@ -11,7 +11,41 @@ model calls) is implemented, and its live acceptance was **measured on 2026-09-2
 The measurement moved the bottleneck: it is output tokens, not round trips. The next action is a
 decision on cutting output tokens (below). Stages 2 to 7 have not begun.
 
-## Session of 2026-09-29, last: a customer repository can now reach a cloud model
+## Session of 2026-09-29, last: administration is served, under ADR-028
+
+The admin routes existed but `apps/api/src/main.ts` never registered them, so a deployed control
+plane could not sign anyone in, enable a repository, set policy, store a credential or enroll a
+runner. Three commits close that.
+
+- **Real identity and a real admin check** (`packages/github/src/identity.ts`). `GitHubIdentity`
+  signs a user in with the App's own OAuth credentials; the user's token is used inside the
+  exchange and dropped, so a session carries identity and never a secret. `githubAdminCheck` asks
+  GitHub at write time, as the App with a new metadata-only token role, whether that user
+  administers each repository. The login is looked up from the stable user id every time and the
+  answer must name that id, so a renamed account whose old login someone else took is never
+  checked as the wrong person. Every failure is "not an administrator".
+- **ADR-028 enforced on organization-wide writes.** Policy, credential save and revoke, runner
+  revocation and enrollment cancellation previously needed only session membership.
+  `AdministrationStore.asOrganizationAdmin` now requires admin on *every* enabled repository and at
+  least one enabled repository, with check and write in one transaction under a per-organization
+  advisory lock that `setEnabled` also takes. Removing the lock from `setEnabled` makes the
+  serialization test fail, so it is load-bearing. `PUT /api/policy` validates against the schema,
+  because a stored invalid policy silently skips every review.
+- **Wired, behind explicit configuration** (`apps/api/src/admin-bindings.ts`). Without
+  `HUMANIZE_SESSION_KEY`, the OAuth client id and secret, and `HUMANIZE_ENCRYPTION_KEYS`, the API
+  logs `api.no_administration` naming each and registers no admin route. `.env.example` now lists
+  every variable that exists; it previously named a `HUMANIZE_MASTER_KEY` that nothing read.
+
+Smoke-tested by running the built API both ways (see P1-S16-T03 evidence). **Not yet done live:** a
+completed GitHub sign-in, and confirming the collaborator-permission endpoint answers a
+metadata-only installation token. Both need the App's OAuth client id and secret and a callback URL
+registered on the App.
+
+**Onboarding order this enforces:** sign in → enable a repository (repo admin) → set policy (admin
+of every enabled repository) → store a provider credential and put its id in the policy's
+`credentialRef` → reviews run. A review with no stored policy is skipped, never defaulted.
+
+## Session of 2026-09-29, later still: a customer repository can now reach a cloud model
 
 The Bedrock adapter was live-verified on 2026-09-28, but nothing a customer did could reach it.
 Three things stood between them, and each is now its own commit.
@@ -46,8 +80,8 @@ reporting `cloud_execution_unavailable` instead of queueing work nothing will ta
 
 **Not proven end to end.** No cloud review has run against a real pull request, because nothing yet
 creates an organization whose policy sets `executionMode: cloud` with a stored provider credential.
-That is the next step: an administrator path to store a credential and set the execution mode, then
-one live cloud run. Noted separately and affecting both executors: `review_runs` advances only
+The administrator path to store a credential and set the execution mode now exists (above); what
+remains is one live cloud run. Noted separately and affecting both executors: `review_runs` advances only
 `RECEIVED` to `QUEUED`, so the rest of the run-state machine is unused by either path.
 
 ## Session of 2026-09-29, later: where findings actually come from (ADR-042)
