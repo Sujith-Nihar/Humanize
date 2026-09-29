@@ -10,9 +10,11 @@ problem: `node_modules` was absent, so `pnpm install --frozen-lockfile` is requi
 six blockers that sit between components each tested alone. **B1, B2 and B3 are fixed** under
 [ADR-043](../adr/ADR-043.md): results carry the context their evidence cites, the snapshot carries
 the resolved review settings, and publication recomputes rule findings itself. Each fix has a test
-at the executor boundary where the defect lived, and each was checked by reverting it. **Next is B4**:
-accepting a runner result and scheduling its publication must be atomic, and publication must be
-idempotent (M2). The audit's repair order continues from there.
+at the executor boundary where the defect lived, and each was checked by reverting it. **B4 and M2 are
+also fixed**: acceptance and scheduling commit in one transaction, and a publication retry finishes
+the work rather than posting a second check run or review. **Next is B5**: only the first 20
+changed nodes are reviewed, silently. Then M1 (inline comments pile up across pushes) and M5/M7
+(limits). The audit's repair order continues from there.
 
 **The production review plan is in [plan-production-review.md](plan-production-review.md).** Stage 1 (batching
 model calls) is implemented, and its live acceptance was **measured on 2026-09-28 and not met**.
