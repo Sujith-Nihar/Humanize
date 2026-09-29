@@ -44,6 +44,9 @@
       "path": "packages/telemetry/tsconfig.build.json"
     },
     {
+      "path": "packages/execution/tsconfig.build.json"
+    },
+    {
       "path": "packages/extractors/tsconfig.build.json"
     },
     {

@@ -1,5 +1,5 @@
 {
-  "name": "@humanize/runner",
+  "name": "@humanize/execution",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -11,18 +11,13 @@
     }
   },
   "dependencies": {
-    "@humanize/config": "workspace:*",
     "@humanize/domain": "workspace:*",
-    "@humanize/execution": "workspace:*",
     "@humanize/extractors": "workspace:*",
     "@humanize/github": "workspace:*",
-    "@humanize/providers": "workspace:*",
     "@humanize/retrieval": "workspace:*",
     "@humanize/review": "workspace:*",
     "@humanize/rules": "workspace:*",
     "@humanize/scanner": "workspace:*",
-    "@humanize/shared": "workspace:*",
-    "@humanize/suggestions": "workspace:*",
-    "@humanize/telemetry": "workspace:*"
+    "@humanize/suggestions": "workspace:*"
   }
 }

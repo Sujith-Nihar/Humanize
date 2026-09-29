@@ -126,6 +126,9 @@ importers:
       '@humanize/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@humanize/execution':
+        specifier: workspace:*
+        version: link:../../packages/execution
       '@humanize/extractors':
         specifier: workspace:*
         version: link:../../packages/extractors
@@ -294,6 +297,33 @@ importers:
       zod:
         specifier: 4.6.5
         version: 4.6.5
+
+  packages/execution:
+    dependencies:
+      '@humanize/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@humanize/extractors':
+        specifier: workspace:*
+        version: link:../extractors
+      '@humanize/github':
+        specifier: workspace:*
+        version: link:../github
+      '@humanize/retrieval':
+        specifier: workspace:*
+        version: link:../retrieval
+      '@humanize/review':
+        specifier: workspace:*
+        version: link:../review
+      '@humanize/rules':
+        specifier: workspace:*
+        version: link:../rules
+      '@humanize/scanner':
+        specifier: workspace:*
+        version: link:../scanner
+      '@humanize/suggestions':
+        specifier: workspace:*
+        version: link:../suggestions
 
   packages/extractors:
     dependencies:
