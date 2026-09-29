@@ -21,7 +21,7 @@ export function createApi(options:{webhookSecret:string;sink:WebhookSink;runners
   app.get('/health',async()=>({status:'ok'}));
   registerRunnerRoutes(app,options.runners,options.tokens,options.publication);
   if(options.admin)registerAdminRoutes(app,options.admin);
-  // Opt-in and unwired from apps/api/src/main.ts today, exactly like admin: authentication for
+  // Opt-in and unwired from apps/api/src/main.ts today: authentication for
   // this surface is unresolved (ADR-040), so the route does not exist at all in the deployed
   // process until an operator explicitly supplies reviewer/verifier ports.
   if(options.extension)registerExtensionRoutes(app,options.extension);

@@ -2,7 +2,9 @@ import { Database,PublicationStore,RunnerStore,migrate } from '@humanize/db';
 import { JobQueue } from '@humanize/queue';
 import { GitHubTokenBroker } from '@humanize/github';
 import { OllamaProvider } from '@humanize/providers';
+import { cipherFromEnvironment } from '@humanize/security';
 import { createApi } from './app.js';
+import { resolveAdmin } from './admin-bindings.js';
 import { resolveExtensionPorts } from './extension-dev.js';
 import { DurableWebhookSink } from './webhook-store.js';
 
@@ -14,7 +16,7 @@ const db=new Database(url);await migrate(db);const queue=new JobQueue(url);await
 const publications=new PublicationStore(db);
 // /extension/reviews exists in this process only when a development credential is explicitly
 // configured (ADR-040: production credential issuance is unresolved). Absent, this resolves to
-// undefined and the route is never registered at all, exactly like `admin` remains unwired today.
+// undefined and the route is never registered at all.
 // OllamaProvider is constructed only in that same case, so a malformed or unreachable
 // OLLAMA_BASE_URL can never affect the GitHub-review control plane's startup when the browser
 // extension's development path is disabled.
@@ -25,9 +27,16 @@ const extension=devCredential
       new OllamaProvider(process.env.OLLAMA_BASE_URL??'http://127.0.0.1:11434',true),
     )
   :undefined;
+const runners=new RunnerStore(db),broker=new GitHubTokenBroker(appId,privateKey);
+// Administration is registered only when fully configured, and what is missing is named once
+// at startup, so an absent dashboard backend is a stated fact rather than a mystery 404.
+const admin=resolveAdmin(process.env,db,broker,runners,cipherFromEnvironment());
+if(!admin.options)console.log(JSON.stringify({event:'api.no_administration',missing:admin.missing,
+  message:'Administration routes are not registered until every listed variable is configured.'}));
 const app=createApi({
-  webhookSecret:secret,sink:new DurableWebhookSink(db,queue),runners:new RunnerStore(db),
-  tokens:new GitHubTokenBroker(appId,privateKey),
+  webhookSecret:secret,sink:new DurableWebhookSink(db,queue),runners,
+  tokens:broker,
+  ...(admin.options?{admin:admin.options}:{}),
   // An accepted result is held only until publication completes or is abandoned (ADR-038),
   // and the job carries identifiers alone. A runner never waits on GitHub.
   publication:{schedule:async(result,scope)=>{
