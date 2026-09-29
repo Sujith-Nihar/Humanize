@@ -129,7 +129,16 @@ export const LeaseIdentitySchema=z.object({leaseId:z.string().uuid(),fence:z.num
  */
 export const ReviewResultSchema=z.object({
   version:z.literal(1),runId:z.string().uuid(),snapshotHash:Id,
-  nodes:z.array(ContentNodeSchema).max(10000),candidates:z.array(CandidateSchema).max(100),evidence:z.array(EvidenceSchema).max(1000),
+  /** The changed content that was reviewed. Every candidate must point at one of these. */
+  nodes:z.array(ContentNodeSchema).max(10000),
+  /**
+   * Unchanged content that evidence cites: the neighbouring paragraph a repetition finding
+   * compares against, the heading a claim contradicts. It travels so the control plane can check
+   * each cited quotation against the text it claims to come from, rather than take it on faith.
+   * It is never reviewed and no finding may point at it (ADR-043).
+   */
+  contextNodes:z.array(ContentNodeSchema).max(2000).default([]),
+  candidates:z.array(CandidateSchema).max(100),evidence:z.array(EvidenceSchema).max(1000),
   verification:VerificationSchema,diagnostics:z.array(z.object({code:z.string().regex(/^[A-Z_]{1,100}$/),count:z.number().int().nonnegative()}).strict()).max(100),
 }).strict();
 export type ReviewResult=z.infer<typeof ReviewResultSchema>;
@@ -184,19 +193,24 @@ export type ResultViolation=z.infer<typeof ResultViolation>;
 export function validateRunnerResult(result:ReviewResult,snapshot:ReviewSnapshot):ResultViolation[] {
   const violations=new Set<ResultViolation>();
   const nodes=new Map<string,ContentNode>();
-  for(const node of result.nodes){
-    if(nodes.has(node.id))violations.add('DUPLICATE_NODE_IDENTITY');
-    nodes.set(node.id,node);
-    // Content extracted from any other commit or repository is stale or foreign by definition.
-    if(node.commitSha!==snapshot.headSha)violations.add('NODE_NOT_AT_HEAD');
-    if(node.repositoryId!==snapshot.repositoryId)violations.add('NODE_FOREIGN_REPOSITORY');
+  const cited=new Map<string,ContentNode>();
+  for(const [target,list] of [[nodes,result.nodes],[cited,result.contextNodes]] as const){
+    for(const node of list){
+      // One identity names one piece of content, whichever list carries it.
+      if(nodes.has(node.id)||cited.has(node.id))violations.add('DUPLICATE_NODE_IDENTITY');
+      target.set(node.id,node);
+      // Content extracted from any other commit or repository is stale or foreign by definition.
+      if(node.commitSha!==snapshot.headSha)violations.add('NODE_NOT_AT_HEAD');
+      if(node.repositoryId!==snapshot.repositoryId)violations.add('NODE_FOREIGN_REPOSITORY');
+    }
   }
   const evidence=new Map<string,EvidenceRecord>();
   for(const record of result.evidence){
     if(evidence.has(record.id))violations.add('DUPLICATE_EVIDENCE_IDENTITY');
     evidence.set(record.id,record);
     if(record.nodeId!==undefined){
-      const node=nodes.get(record.nodeId);
+      // Evidence may quote reviewed content or the unchanged context it was compared against.
+      const node=nodes.get(record.nodeId)??cited.get(record.nodeId);
       if(!node)violations.add('EVIDENCE_NODE_UNKNOWN');
       else if(record.quote!==undefined&&!node.text.includes(record.quote))violations.add('EVIDENCE_QUOTE_NOT_IN_NODE');
     }

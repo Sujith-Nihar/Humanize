@@ -43,3 +43,5 @@ Upstream ADR-001 through ADR-020 remain authoritative in [specification §3](../
 - [ADR-041: Amazon Bedrock as a fifth cloud provider](ADR-041.md) — accepted for the adapter and live lane; cloud execution in the worker not included
 
 - [ADR-042: Separate reviewer and verifier confidence thresholds](ADR-042.md) — accepted, affects P1-S08/P1-S13
+
+- [ADR-043: What crosses the boundary between execution and publication](ADR-043.md) — accepted, resolves audit B1-B3; affects P1-S07-T05, P1-S08-T01/T03/T04

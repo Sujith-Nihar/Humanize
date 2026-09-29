@@ -22,7 +22,7 @@ const claimed=async(runner=credential)=>{
 const node=(headSha:string):ContentNode=>({id:'node-1',repositoryId:repo,commitSha:headSha,filePath:'app/page.tsx',blobSha:'d'.repeat(40),parser:'babel',parserVersion:'1',startLine:1,endLine:1,startOffset:0,endOffset:30,text:'Unlock unprecedented potential',normalizedText:'unlock unprecedented potential',kind:'heading',sourceKind:'jsx_text',dynamic:false,visibilityConfidence:1,placeholders:[],stableKey:'stable-1',mappingVersion:1,segments:[],extractionConfigHash:'config-hash',suggestionSafe:true});
 const envelope=(lease:{leaseId:string;fence:number;runId:string;snapshot:ReviewSnapshot},overrides:Partial<RunnerResult>={}):RunnerResult=>({
   version:1,leaseId:lease.leaseId,fence:lease.fence,runId:lease.runId,snapshotHash:snapshotDigest(JSON.parse(JSON.stringify(lease.snapshot))),
-  nodes:[node(lease.snapshot.headSha)],
+  contextNodes:[],nodes:[node(lease.snapshot.headSha)],
   candidates:[{nodeId:'node-1',category:'ai_like_generic',severity:'minor',confidence:0.9,exactText:'Unlock unprecedented potential',explanation:'Broad promotional wording',evidence:[],replacement:null,requiresVerification:true}],
   evidence:[],verification:{results:[]},diagnostics:[],...overrides,
 });

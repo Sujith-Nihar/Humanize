@@ -12,7 +12,7 @@ const capabilities={protocolVersion:1 as const,schemaVersion:'humanize-runner-v1
 let credential='',runnerId='',runId='',lease:Lease|null=null;let snapshot:ReviewSnapshot;
 // PostgreSQL JSONB re-orders object keys, so equivalent payloads must still digest equally.
 const reorder=<T>(value:T):T=>Array.isArray(value)?value.map(reorder) as T:value&&typeof value==='object'?Object.fromEntries(Object.entries(value).reverse().map(([k,v])=>[k,reorder(v)])) as T:value;
-const envelope=(lease:Lease,overrides:Partial<RunnerResult>={}):RunnerResult=>({version:1,leaseId:lease.leaseId,fence:lease.fence,runId:lease.runId,snapshotHash:snapshotDigest(JSON.parse(JSON.stringify(lease.snapshot))),nodes:[],candidates:[],evidence:[],verification:{results:[]},diagnostics:[],...overrides});
+const envelope=(lease:Lease,overrides:Partial<RunnerResult>={}):RunnerResult=>({version:1,leaseId:lease.leaseId,fence:lease.fence,runId:lease.runId,snapshotHash:snapshotDigest(JSON.parse(JSON.stringify(lease.snapshot))),contextNodes:[],nodes:[],candidates:[],evidence:[],verification:{results:[]},diagnostics:[],...overrides});
 beforeAll(async()=>{
   await migrate(db);await db.pool.query('INSERT INTO organizations(id,github_account_id) VALUES($1,$2)',[org,randomInt(1,1000000000)]);
   await db.pool.query('INSERT INTO github_installations(id,organization_id) VALUES($1,$2)',[installation,org]);

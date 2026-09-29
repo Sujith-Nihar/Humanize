@@ -11,7 +11,7 @@ const org=randomUUID(),repo=randomUUID(),installation=randomInt(1,1000000000);
 let runId='',snapshot:ReviewSnapshot;
 
 const result=()=>({version:1 as const,leaseId:randomUUID(),fence:1,runId,snapshotHash:'digest',
-  nodes:[],candidates:[],evidence:[],verification:{results:[]},diagnostics:[]});
+  contextNodes:[],nodes:[],candidates:[],evidence:[],verification:{results:[]},diagnostics:[]});
 const job=():JobPayload=>({version:1,organizationId:org,repositoryId:repo,runId,traceId:runId,idempotencyKey:runId});
 const held=async()=>(await db.pool.query('SELECT 1 FROM publication_payloads WHERE run_id=$1',[runId])).rowCount;
 

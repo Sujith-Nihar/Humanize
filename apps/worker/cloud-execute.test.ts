@@ -20,7 +20,7 @@ const payload:JobPayload={version:1,organizationId:'org',repositoryId:'repo',run
 const node:ContentNode={id:'node-1',repositoryId:'repo',commitSha:headSha,filePath:'app/page.tsx',blobSha:'d'.repeat(40),parser:'babel',parserVersion:'1',startLine:1,endLine:1,startOffset:0,endOffset:43,text:'Unlock unprecedented potential with our tool',normalizedText:'unlock unprecedented potential with our tool',kind:'heading',sourceKind:'jsx_text',dynamic:false,visibilityConfidence:1,placeholders:[],stableKey:'stable-1',mappingVersion:1,segments:[],extractionConfigHash:'config-hash',suggestionSafe:true};
 const report=(nodes:ContentNode[]=[node],candidates:ExecutionReport['result']['candidates']=[]):ExecutionReport=>({
   inspectedFiles:3,extractedNodes:nodes.length,changedNodes:nodes.length,
-  result:{version:1,runId,snapshotHash:'ignored-by-these-doubles',nodes,candidates,evidence:[],verification:{results:[]},diagnostics:[]},
+  result:{version:1,runId,snapshotHash:'ignored-by-these-doubles',nodes,contextNodes:[],candidates,evidence:[],verification:{results:[]},diagnostics:[]},
 });
 
 const model={} as ModelProvider;

@@ -8,7 +8,7 @@ const snapshot:ReviewSnapshot={version:1,organizationId:'org',repositoryId:'repo
 const node:ContentNode={id:'node-1',repositoryId:'repo',commitSha:headSha,filePath:'app/page.tsx',blobSha:'d'.repeat(40),parser:'babel',parserVersion:'1',startLine:1,endLine:1,startOffset:0,endOffset:44,text:'Unlock unprecedented potential with our tool',normalizedText:'unlock unprecedented potential with our tool',kind:'heading',sourceKind:'jsx_text',dynamic:false,visibilityConfidence:1,placeholders:[],stableKey:'stable-1',mappingVersion:1,segments:[],extractionConfigHash:'config-hash',suggestionSafe:true};
 const evidence:EvidenceRecord={id:'evidence-1',type:'repo_content',description:'Existing headings are capability focused',revision:headSha,contentHash:'hash-1',nodeId:'node-1',quote:'Unlock unprecedented potential'};
 const candidate={nodeId:'node-1',category:'ai_like_generic' as const,severity:'minor' as const,confidence:0.9,exactText:'Unlock unprecedented potential',explanation:'Broad promotional wording',evidence:[{id:'evidence-1',quote:null}],replacement:null,requiresVerification:true};
-const base:RunnerResult={version:1,leaseId:'11111111-1111-4111-8111-111111111111',fence:1,runId:'22222222-2222-4222-8222-222222222222',snapshotHash:'digest',nodes:[node],candidates:[candidate],evidence:[evidence],verification:{results:[{candidateId:candidateDigest(candidate),publish:true,confidence:0.9,correctedExplanation:null,correctedReplacement:null,reasonIfSuppressed:null}]},diagnostics:[]};
+const base:RunnerResult={version:1,leaseId:'11111111-1111-4111-8111-111111111111',fence:1,runId:'22222222-2222-4222-8222-222222222222',snapshotHash:'digest',contextNodes:[],nodes:[node],candidates:[candidate],evidence:[evidence],verification:{results:[{candidateId:candidateDigest(candidate),publish:true,confidence:0.9,correctedExplanation:null,correctedReplacement:null,reasonIfSuppressed:null}]},diagnostics:[]};
 
 it('accepts an internally consistent result', () => {
   expect(validateRunnerResult(base,snapshot)).toEqual([]);
@@ -78,4 +78,21 @@ it('keeps a cloud result digest distinct from a leased one', () => {
   // Different payload kinds, so different digest domains: neither can be replayed as the other.
   expect(reviewResultDigest(cloud)).not.toEqual(runnerResultDigest(base));
   expect(reviewResultDigest(cloud)).toEqual(reviewResultDigest({...cloud}));
+});
+
+it('accepts evidence quoting unchanged context, and holds that context to the same rules', () => {
+  const neighbour:ContentNode={...node,id:'node-2',startLine:3,endLine:3,text:'Existing copy says what the tool does',normalizedText:'existing copy says what the tool does',stableKey:'stable-2'};
+  const context:EvidenceRecord={...evidence,id:'evidence-2',nodeId:'node-2',quote:'says what the tool does'};
+  const cited={...base,contextNodes:[neighbour],evidence:[evidence,context],verification:{results:[]},
+    candidates:[{...candidate,evidence:[{id:'evidence-1',quote:null},{id:'evidence-2',quote:null}]}]};
+  expect(validateRunnerResult(cited,snapshot)).toEqual([]);
+  // A quotation must still be found in the context node it names.
+  expect(validateRunnerResult({...cited,evidence:[evidence,{...context,quote:'words that are not there'}]},snapshot)).toEqual(['EVIDENCE_QUOTE_NOT_IN_NODE']);
+  // Context is content from the reviewed commit and repository, or it is refused.
+  expect(validateRunnerResult({...cited,contextNodes:[{...neighbour,commitSha:'f'.repeat(40)}]},snapshot)).toContain('NODE_NOT_AT_HEAD');
+  expect(validateRunnerResult({...cited,contextNodes:[{...neighbour,repositoryId:'other'}]},snapshot)).toContain('NODE_FOREIGN_REPOSITORY');
+  // One identity cannot be both reviewed content and context.
+  expect(validateRunnerResult({...cited,contextNodes:[node]},snapshot)).toContain('DUPLICATE_NODE_IDENTITY');
+  // Context is never reviewed, so no finding may point at it.
+  expect(validateRunnerResult({...cited,candidates:[{...candidate,nodeId:'node-2',exactText:'says what the tool does'}]},snapshot)).toContain('CANDIDATE_NODE_UNKNOWN');
 });

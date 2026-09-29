@@ -106,6 +106,13 @@ export async function executeReview(
     for(const suppressed of outcome.suppressed)diagnostics.set(`SUPPRESSED_${suppressed.reason.toUpperCase()}`,(diagnostics.get(`SUPPRESSED_${suppressed.reason.toUpperCase()}`)??0)+1);
     for(const failure of outcome.failures)diagnostics.set(`REVIEW_FAILED_${failure.errorClass.replace(/[^A-Z_]/gi,'_').toUpperCase()}`.slice(0,100),(diagnostics.get(`REVIEW_FAILED_${failure.errorClass.replace(/[^A-Z_]/gi,'_').toUpperCase()}`.slice(0,100))??0)+1);
     const evidence=new Map(outcome.findings.flatMap(finding=>finding.evidenceRecords.map(record=>[record.id,record])));
+    // Evidence usually quotes content the pull request did not change. Those nodes travel with
+    // the result so their quotations can be checked; sending only the changed nodes made every
+    // finding that cited context fail validation and took the whole review down with it.
+    const reviewed=new Set(changed.map(node=>node.id));
+    const byId=new Map(nodes.map(node=>[node.id,node]));
+    const contextNodes=[...new Set([...evidence.values()].map(record=>record.nodeId).filter((id):id is string=>id!==undefined&&!reviewed.has(id)))]
+      .map(id=>byId.get(id)).filter((node):node is ContentNode=>node!==undefined);
     // A replacement becomes a one-click suggestion only when every safety check passes;
     // anything else stays a comment, which is always publishable.
     const suggestions=new Map<string,string>();
@@ -123,7 +130,7 @@ export async function executeReview(
       inspectedFiles,extractedNodes:nodes.length,changedNodes:changed.length,
       result:{
         version:1,runId,snapshotHash:snapshotDigest(snapshot),
-        nodes:changed,candidates:outcome.findings.map(finding=>({
+        nodes:changed,contextNodes,candidates:outcome.findings.map(finding=>({
           nodeId:finding.nodeId,category:finding.category,severity:finding.severity,confidence:finding.confidence,
           exactText:finding.exactText,explanation:finding.explanation,evidence:finding.evidence,
           replacement:finding.replacement,requiresVerification:finding.requiresVerification,

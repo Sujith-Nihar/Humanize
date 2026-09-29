@@ -15,7 +15,7 @@ const node=(overrides:Partial<ContentNode>={}):ContentNode=>({
   dynamic:false,visibilityConfidence:1,placeholders:[],stableKey:'stable-1',mappingVersion:1,segments:[],extractionConfigHash:'config',suggestionSafe:true,...overrides});
 const result=(overrides:Partial<RunnerResult>={}):RunnerResult=>({
   version:1,leaseId:'11111111-1111-4111-8111-111111111111',fence:1,runId:'22222222-2222-4222-8222-222222222222',snapshotHash:'digest',
-  nodes:[node()],candidates:[{nodeId:'node-1',category:'ai_like_generic',severity:'minor',confidence:0.95,exactText:'Unlock unprecedented potential',
+  contextNodes:[],nodes:[node()],candidates:[{nodeId:'node-1',category:'ai_like_generic',severity:'minor',confidence:0.95,exactText:'Unlock unprecedented potential',
     explanation:'Broad promotional wording.',evidence:[],replacement:null,requiresVerification:true}],
   evidence:[],verification:{results:[]},diagnostics:[],...overrides});
 const diff:DiffMap={repositoryId:'repo',baseSha:'a'.repeat(40),headSha,mergeBaseSha:'a'.repeat(40),

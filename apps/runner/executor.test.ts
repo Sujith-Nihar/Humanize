@@ -4,7 +4,7 @@ import { mkdtemp,rm,writeFile,readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import { Category } from '@humanize/domain';
+import { Category,validateRunnerResult } from '@humanize/domain';
 import type { ModelProvider,ReviewSnapshot } from '@humanize/domain';
 import { executeReview } from './src/executor.js';
 import type { Lease,LeaseCredential } from './src/client.js';
@@ -49,12 +49,12 @@ const provider=(candidates:unknown[]):ModelProvider=>({
 } as unknown as ModelProvider);
 
 // Acquisition normally clones from GitHub; the fixture origin stands in for that remote.
-const fromLocalOrigin=async(fn:()=>Promise<unknown>)=>{
+const fromLocalOrigin=async(fn:()=>Promise<unknown>,source=origin)=>{
   const scanner=await import('@humanize/scanner');
   const original=scanner.GitRepository.acquire;
   const patched=async(workspace:{path:string})=>{
     const gitDir=join(workspace.path,'repo.git');
-    await run('git',['clone','--bare','--no-local','--no-tags','-q',origin,gitDir]);
+    await run('git',['clone','--bare','--no-local','--no-tags','-q',source,gitDir]);
     return scanner.GitRepository.forFixture(gitDir,workspace as never);
   };
   Object.defineProperty(scanner.GitRepository,'acquire',{value:patched,configurable:true});
@@ -104,4 +104,45 @@ it('destroys the workspace when acquisition itself fails', async () => {
     await expect(executeReview(lease(),credential(),{provider:provider([])},{enabled,workspaceRoot})).rejects.toThrow('clone refused');
     expect(await readdir(workspaceRoot)).toEqual([]);
   }finally{Object.defineProperty(scanner.GitRepository,'acquire',{configurable:true,value:original});}
+}, 120000);
+
+it('sends the unchanged content its evidence cites, so a context-backed finding survives validation', async () => {
+  // The defect this guards against: the result carried only changed nodes, so any finding citing
+  // retrieved context failed validation with EVIDENCE_NODE_UNKNOWN and the whole review was lost.
+  const repo=await mkdtemp(join(tmpdir(),'humanize-context-'));
+  const git=(...args:string[])=>run('git',['-C',repo,...args]);
+  try{
+    await run('git',['init','-q','-b','main',repo]);
+    await git('config','user.email','fixture@example.com');await git('config','user.name','Fixture');
+    await writeFile(join(repo,'README.md'),'# Guide\n\nOur platform delivers seamless synergy for every team.\n\nSetup takes five minutes.\n');
+    await git('add','.');await git('commit','-qm','base');
+    const base=(await git('rev-parse','HEAD')).stdout.trim();
+    await writeFile(join(repo,'README.md'),'# Guide\n\nOur platform delivers seamless synergy for every team.\n\nOur platform delivers seamless synergy for everyone.\n');
+    await git('add','.');await git('commit','-qm','head');
+    const head=(await git('rev-parse','HEAD')).stdout.trim();
+
+    // A model that does what the prompt asks: cite the evidence it was given, here the
+    // unchanged paragraph on line 3 that the changed one repeats.
+    const citing={id:'ollama',testConnection:vi.fn(),generateStructured:vi.fn(async(args:{system:string;input:string})=>{
+      if(args.system.startsWith('You review')){
+        const nodeId=/nodeId "([^"]+)"/.exec(args.input)![1]!;
+        const neighbour=/id: ([a-f0-9]{64}) \(README\.md:3\)/.exec(args.input)![1]!;
+        return {data:{candidates:[{nodeId,category:'clarity',severity:'minor',confidence:0.9,exactText:'seamless synergy',
+          explanation:'This repeats the paragraph above almost word for word.',evidence:[{id:neighbour,quote:null}],replacement:null,requiresVerification:true}],searches:[]},provider:'ollama',model:'fixture',durationMs:1};
+      }
+      const candidateId=/candidateId: (\S+)/.exec(args.input)![1]!;
+      return {data:{results:[{candidateId,publish:true,confidence:0.95,correctedExplanation:null,correctedReplacement:null,reasonIfSuppressed:null}]},provider:'ollama',model:'fixture',durationMs:1};
+    })} as unknown as ModelProvider;
+
+    const job={...lease(),snapshot:{...snapshot(),baseSha:base,headSha:head}};
+    const report=await fromLocalOrigin(async()=>executeReview(job,{...credential(),headSha:head},{provider:citing},{enabled,workspaceRoot}),repo) as Awaited<ReturnType<typeof executeReview>>;
+
+    expect(report.result.candidates).toHaveLength(1);
+    expect(report.result.nodes.map(node=>node.startLine)).toEqual([5]);
+    // The cited paragraph travels as context, not as reviewed content.
+    expect(report.result.contextNodes.map(node=>node.startLine)).toEqual([3]);
+    expect(validateRunnerResult(report.result,job.snapshot)).toEqual([]);
+    // Without it, exactly the old failure returns.
+    expect(validateRunnerResult({...report.result,contextNodes:[]},job.snapshot)).toEqual(['EVIDENCE_NODE_UNKNOWN']);
+  }finally{await rm(repo,{recursive:true,force:true});}
 }, 120000);
