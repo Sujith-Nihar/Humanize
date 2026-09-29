@@ -6,6 +6,7 @@ import type { ReviewerUnitInput,VerifierUnitInput } from './prompt.js';
 import { routeNode } from './router.js';
 import type { CategoryName,RoutingDecision,RoutingOptions } from './router.js';
 import { applyVerification,validateCandidate } from './core.js';
+import { deterministicFindings } from './deterministic.js';
 import type { ReviewableUnit,SuppressionReason } from './core.js';
 
 export { authorFacing } from './core.js';
@@ -121,20 +122,7 @@ export async function reviewNodes(snapshot:ReviewSnapshot,nodes:readonly Content
     const routing=routeNode(node,{...options,enabled:scope.enabled});
     const signals=ports.rules(node);
 
-    // A blocking violation is a customer policy; a standalone signal is an objectively
-    // countable observation (ADR-037). Neither needs a model to agree that it is present.
-    for(const signal of signals.filter(entry=>entry.blocking||entry.standalone===true)){
-      findingsByNode.get(node.id)!.push({
-        nodeId:node.id,category:signal.category,severity:signal.severity,confidence:1,
-        exactText:signal.matchedText,explanation:signal.description,
-        evidence:[{id:signal.evidence.id,quote:signal.matchedText}],
-        // A rule offers a replacement only where deleting the construction is unambiguous;
-        // the control plane still proves it is a safe patch before publishing it.
-        replacement:signal.replacement??null,requiresVerification:false,
-        fingerprint:fingerprint(['finding',node.stableKey,signal.ruleId,signal.matchedText]),
-        node,evidenceRecords:[signal.evidence],deterministic:true,blocking:signal.blocking,verificationConfidence:1,
-      });
-    }
+    findingsByNode.get(node.id)!.push(...deterministicFindings(node,signals));
     if(!routing.eligible)continue;
     reviewed++;
     try{

@@ -6,6 +6,8 @@ import { publishResult } from './src/publish.js';
 import { findingsFromResult } from '@humanize/review';
 
 const headSha='b'.repeat(40);
+// These cases concern model candidates; no rules are configured for them.
+const noRules=()=>[];
 const text='Unlock unprecedented potential with our cutting-edge platform.';
 const profile={provider:'ollama' as const,model:'fixture',credentialRef:null,maxInputTokens:12000,maxOutputTokens:4000,evaluatedLanguages:['en']};
 const snapshot:ReviewSnapshot={version:1,organizationId:'org',repositoryId:'repo',installationId:7,owner:'acme',repository:'site',pullNumber:7,
@@ -31,7 +33,7 @@ const ports=(head=headSha,map:DiffMap=diff)=>{
 
 it('publishes a verified finding as an inline comment on the changed line', async () => {
   const p=ports();
-  const outcome=await publishResult({snapshot,result:result()},p);
+  const outcome=await publishResult({snapshot,rules:noRules,result:result()},p);
   expect(outcome).toMatchObject({reviewId:2,checkRunId:1});
   const review=p.calls.find(call=>call.route.endsWith('/reviews'))!.parameters as {comments:{path:string;line:number}[];body:string};
   expect(review.comments).toEqual([expect.objectContaining({path:'app/page.tsx',line:12})]);
@@ -42,23 +44,23 @@ it('discards a finding whose quotation is not in the content the runner supplied
   // The runner is untrusted, so the control plane re-checks rather than relaying.
   const fabricated=result({candidates:[{nodeId:'node-1',category:'ai_like_generic',severity:'major',confidence:0.99,
     exactText:'wording that was never written',explanation:'Invented.',evidence:[],replacement:null,requiresVerification:false}]});
-  expect(findingsFromResult(fabricated,snapshot)).toEqual([]);
+  expect(findingsFromResult(fabricated,snapshot,noRules)).toEqual([]);
   const p=ports();
-  await publishResult({snapshot,result:fabricated},p);
+  await publishResult({snapshot,rules:noRules,result:fabricated},p);
   const review=p.calls.find(call=>call.route.endsWith('/reviews'));
   expect(review).toBeUndefined();
   expect(p.calls.find(call=>call.route.endsWith('/check-runs'))!.parameters).toMatchObject({conclusion:'success'});
 });
 
 it('discards content that does not belong to the reviewed commit', () => {
-  expect(findingsFromResult(result({nodes:[node({commitSha:'f'.repeat(40)})]}),snapshot)).toEqual([]);
+  expect(findingsFromResult(result({nodes:[node({commitSha:'f'.repeat(40)})]}),snapshot,noRules)).toEqual([]);
   expect(findingsFromResult(result({candidates:[{nodeId:'missing',category:'clarity',severity:'minor',confidence:0.9,
-    exactText:'Unlock unprecedented potential',explanation:'x',evidence:[],replacement:null,requiresVerification:true}]}),snapshot)).toEqual([]);
+    exactText:'Unlock unprecedented potential',explanation:'x',evidence:[],replacement:null,requiresVerification:true}]}),snapshot,noRules)).toEqual([]);
 });
 
 it('publishes nothing when the pull request has moved on', async () => {
   const p=ports('c'.repeat(40));
-  const outcome=await publishResult({snapshot,result:result()},p);
+  const outcome=await publishResult({snapshot,rules:noRules,result:result()},p);
   expect(outcome).toMatchObject({skipped:'stale_head',current:'c'.repeat(40)});
   expect(p.calls.map(call=>call.route)).toEqual(['GET /repos/{owner}/{repo}/pulls/{pull_number}']);
 });
@@ -69,11 +71,11 @@ it('holds inline comments to the configured budget', async () => {
     candidates:Array.from({length:8},(_,index)=>({nodeId:`node-${index}`,category:'ai_like_generic' as const,severity:'minor' as const,
       confidence:0.95,exactText:'Unlock unprecedented potential',explanation:'Broad promotional wording.',evidence:[],replacement:null,requiresVerification:true})),
   });
-  expect(findingsFromResult(many,snapshot)).toHaveLength(8);
+  expect(findingsFromResult(many,snapshot,noRules)).toHaveLength(8);
   const wide:DiffMap={...diff,files:Array.from({length:8},(_,index)=>({oldPath:`app/page-${index}.tsx`,newPath:`app/page-${index}.tsx`,
     addedLines:[12],deletedLines:[],hunks:[{oldStart:1,oldCount:20,newStart:1,newCount:20}]}))};
   const p=ports(headSha,wide);
-  await publishResult({snapshot,result:many,maxSubjectiveInline:2},p);
+  await publishResult({snapshot,rules:noRules,result:many,maxSubjectiveInline:2},p);
   const review=p.calls.find(call=>call.route.endsWith('/reviews'))!.parameters as {body:string;comments:unknown[]};
   // Only the budgeted findings are inline; the rest are named in the summary.
   expect(review.comments).toHaveLength(2);

@@ -32,6 +32,18 @@ export interface ExecutionConfig {
 export interface ExecutionPorts { reviewer:ModelProvider; verifier:ModelProvider; token:string; }
 export interface ExecutionReport { result:ReviewResult; inspectedFiles:number; extractedNodes:number; changedNodes:number; }
 
+/**
+ * The rules a review applies to a node: those the snapshot's settings configure for its path.
+ * Exported because publication recomputes deterministic findings with exactly these rules, and
+ * two compositions of them could drift apart (ADR-043).
+ */
+export function configuredRules(scope:ReviewSnapshot['review']):(node:ContentNode)=>NodeSignal[] {
+  return node=>{
+    const {avoid,terminology,blockingRules}=settingsForPath(scope,node.filePath);
+    return evaluateRules(node,{avoid,terminology,blockingRules}) as NodeSignal[];
+  };
+}
+
 /** Lines added on the right-hand side of the diff; a review only judges what the PR changed. */
 function changedLines(patch:string,newPath:string|null):Set<number> {
   const lines=new Set<number>();
@@ -96,7 +108,7 @@ export async function executeReview(
     }
 
     const index=new EphemeralContextIndex(snapshot,nodes);
-    const rulesFor=(node:ContentNode):NodeSignal[]=>{const {avoid,terminology,blockingRules}=settings(node.filePath);return evaluateRules(node,{avoid,terminology,blockingRules}) as NodeSignal[];};
+    const rulesFor=configuredRules(scope);
     const changed=nodes.filter(node=>{
       const lines=changedByPath.get(node.filePath);
       if(!lines)return false;

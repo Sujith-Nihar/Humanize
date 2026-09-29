@@ -6,7 +6,7 @@ import type { ReviewSnapshot } from '@humanize/domain';
 import { GitHubFileSource,GitHubTokenBroker,ReviewPublisher,StaleHeadError,buildCheck,buildReview,fetchDiffMap,githubClient } from '@humanize/github';
 import { createProvider } from '@humanize/providers';
 import { cipherFromEnvironment } from '@humanize/security';
-import { executeReview } from '@humanize/execution';
+import { configuredRules,executeReview } from '@humanize/execution';
 import { executeCloudReview } from './cloud-worker.js';
 import { attachSuggestions,findingsFromResult,planPublication } from '@humanize/review';
 import { handleGitHubEvent } from './handlers.js';
@@ -153,7 +153,9 @@ await queue.work('review.publish',async payload=>{
 
       // Findings are rebuilt from the accepted result and every quotation re-checked, because
       // the runner is untrusted even after its envelope was validated.
-      const findings=findingsFromResult(result,snapshot);
+      // Rule findings are recomputed here with the snapshot's own rules rather than taken from
+      // the result, so no executor can make a finding blocking or leave one out (ADR-043).
+      const findings=findingsFromResult(result,snapshot,configuredRules(snapshot.review));
       // A one-click fix is a patch the author applies to their own repository, so the control
       // plane proves it against the file itself rather than trusting anything the runner sent.
       const suggested=config

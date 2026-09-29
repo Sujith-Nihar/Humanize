@@ -11,5 +11,6 @@ export type { AppliedVerification,ReviewableUnit } from './core.js';
 export { planPublication,scoreFinding } from './ranking.js';
 export type { PublicationPlan,RankedFinding,RankingOptions } from './ranking.js';
 export { findingsFromResult } from './results.js';
+export { deterministicFindings } from './deterministic.js';
 export { attachSuggestions,informationLoss } from './suggest.js';
 export type { SourceReader,SuggestionOutcome } from './suggest.js';

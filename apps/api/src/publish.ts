@@ -1,21 +1,26 @@
 import { findingsFromResult,planPublication } from '@humanize/review';
+import type { NodeSignal } from '@humanize/review';
 import { ReviewPublisher,StaleHeadError,buildCheck,buildReview } from '@humanize/github';
 import type { GitHubTransport,PublishOutcome } from '@humanize/github';
-import type { DiffMap,ReviewResult,ReviewSnapshot } from '@humanize/domain';
+import type { ContentNode,DiffMap,ReviewResult,ReviewSnapshot } from '@humanize/domain';
 
 export interface PublishPorts {
   /** A transport authorised for this installation; the control plane alone holds write access. */
   transport(snapshot:ReviewSnapshot):Promise<GitHubTransport>;
   diff(snapshot:ReviewSnapshot):Promise<DiffMap>;
 }
-export interface PublishRequest { snapshot:ReviewSnapshot; result:ReviewResult; maxSubjectiveInline?:number; }
+export interface PublishRequest {
+  snapshot:ReviewSnapshot; result:ReviewResult; maxSubjectiveInline?:number;
+  /** The customer's configured rules, from which rule findings are recomputed (ADR-043). */
+  rules:(node:ContentNode)=>readonly NodeSignal[];
+}
 
 /**
  * Publishes an accepted result. Only the control plane reaches GitHub: the runner holds a
  * read-only, single-repository token and never has permission to comment.
  */
 export async function publishResult(request:PublishRequest,ports:PublishPorts):Promise<PublishOutcome|{skipped:'stale_head';current:string}> {
-  const findings=findingsFromResult(request.result,request.snapshot);
+  const findings=findingsFromResult(request.result,request.snapshot,request.rules);
   const plan=planPublication(findings,{...(request.maxSubjectiveInline!==undefined?{maxSubjectiveInline:request.maxSubjectiveInline}:{})});
   const diff=await ports.diff(request.snapshot);
   const review=buildReview({inline:plan.inline,summary:plan.summary,diff,reviewedNodes:request.result.nodes.length});

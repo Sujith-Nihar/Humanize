@@ -7,6 +7,9 @@ import { promisify } from 'node:util';
 import {validateRunnerResult,DEFAULT_REVIEW_SCOPE } from '@humanize/domain';
 import type { ModelProvider,ReviewSnapshot } from '@humanize/domain';
 import { executeReview } from './src/executor.js';
+import { configuredRules } from '@humanize/execution';
+import { findingsFromResult,planPublication } from '@humanize/review';
+import { buildCheck } from '@humanize/github';
 import type { Lease,LeaseCredential } from './src/client.js';
 
 const run=promisify(execFile);
@@ -194,5 +197,14 @@ it('reviews with the settings the snapshot carries, not with defaults of its own
     // ...and the model was never shown that file.
     expect(asked.some(input=>input.includes('100% secure'))).toBe(false);
     expect(asked.some(input=>input.includes('Brand new headline'))).toBe(true);
+
+    // And through publication: the control plane recomputes the blocking finding with the same
+    // rules and fails the check run, which a result on its own can never make it do.
+    const review={settings,overrides:[{paths:['docs/**'],settings:{...settings,categories:[]}}]};
+    const published={...snapshot(),baseSha:base,headSha:head,review};
+    const findings=findingsFromResult(configured.result,published,configuredRules(review));
+    expect(findings.filter(finding=>finding.blocking).map(finding=>finding.exactText)).toEqual(['100% secure']);
+    const plan=planPublication(findings,{maxSubjectiveInline:review.settings.maxSubjectiveInline});
+    expect(buildCheck([...plan.inline,...plan.summary]).conclusion).toBe('failure');
   }finally{await rm(repo,{recursive:true,force:true});}
 }, 120000);

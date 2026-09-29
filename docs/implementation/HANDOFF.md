@@ -7,11 +7,12 @@ problem: `node_modules` was absent, so `pnpm install --frozen-lockfile` is requi
 `pnpm test:integration`.
 
 **Resuming? Read [audit-2026-09-29.md](audit-2026-09-29.md) first.** A full-repository audit found
-six blockers that sit between components each tested alone. The most serious (B1, reproduced):
-any finding that cites repository context invalidates the whole review, so nothing is posted.
-Configuration and policy review settings never reach the review (B2), and blocking and
-deterministic status is lost at publication (B3). Fix those before new feature work; the audit
-ends with a suggested repair order.
+six blockers that sit between components each tested alone. **B1, B2 and B3 are fixed** under
+[ADR-043](../adr/ADR-043.md): results carry the context their evidence cites, the snapshot carries
+the resolved review settings, and publication recomputes rule findings itself. Each fix has a test
+at the executor boundary where the defect lived, and each was checked by reverting it. **Next is B4**:
+accepting a runner result and scheduling its publication must be atomic, and publication must be
+idempotent (M2). The audit's repair order continues from there.
 
 **The production review plan is in [plan-production-review.md](plan-production-review.md).** Stage 1 (batching
 model calls) is implemented, and its live acceptance was **measured on 2026-09-28 and not met**.
