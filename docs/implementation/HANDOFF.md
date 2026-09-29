@@ -1,9 +1,82 @@
 # Agent handoff
 
+**Verified green on 2026-09-29** after an eleven-day gap, on commit 79cc3cd: `pnpm check` 382 unit
+tests across 47 files, `pnpm build`, and 70 integration tests across 11 files from a freshly
+created disposable database. Two environment steps were needed first and neither indicates a code
+problem: `node_modules` was absent, so `pnpm install --frozen-lockfile` is required, and the
+`humanize-postgres-1` container was stopped, so `docker compose up -d` is required before
+`pnpm test:integration`.
+
 **Resuming? Start with [plan-production-review.md](plan-production-review.md).** Stage 1 (batching
 model calls) is implemented, and its live acceptance was **measured on 2026-09-28 and not met**.
 The measurement moved the bottleneck: it is output tokens, not round trips. The next action is a
 decision on cutting output tokens (below). Stages 2 to 7 have not begun.
+
+## Session of 2026-09-29, later: where findings actually come from (ADR-042)
+
+An attribution run over the 35-case gold set answers a question the production plan had assumed
+rather than measured.
+
+| | Deterministic rules | Model |
+|---|---|---|
+| Bedrock Claude Haiku 4.5 | 9 | 6 |
+| Local `qwen3.5:4b` | 6 | **14** |
+
+**The model contributes materially**, which contradicts the plan's record that the model half
+"contributes almost nothing".
+
+**Why it looked otherwise:** every suppression on this corpus was `below_confidence`, and none was
+`verifier_suppressed`. Candidates were discarded **before the verifier saw them**. A reviewer's
+self-reported confidence was doing the verifier's job with far less information, while the
+component built to make that decision — holding the evidence — was never consulted.
+
+[ADR-042](../adr/ADR-042.md) splits the single 0.90 cut into a **reviewer threshold of 0.60**
+governing what reaches the verifier, and a **verification threshold of 0.90** governing what is
+published. The reviewer proposes broadly; the verifier decides.
+
+**What the evidence supports, and what it does not.** Precision held at **100% with zero false
+positives across four runs** (two models × two thresholds), so the change is safe. The apparent
+recall gain is **not established**: repeating the gate moved the same corpus between 3 and 4
+missed positives on both models, so a one-case effect is within run-to-run variance at this corpus
+size. Treat single-run recall deltas here as noise until the corpus is much larger.
+
+**Standing detection gap:** `ai-assisted-residual` and `vague-tagline` are missed by every
+configuration measured. In both, the model proposed nothing *and* no rule fired — a detection
+problem, not a threshold one.
+
+## Session of 2026-09-29: Bedrock is live, and the model halves compared
+
+**SigV4 was the missing piece.** The adapter accepted only a Bedrock API key as a bearer token, so
+an `aws login` SSO session could not reach it. SigV4 signing is now a second authentication mode
+through the AWS credential chain, preferred where credentials exist: a role or SSO session is
+short-lived, while an API key is a long-lived secret someone has to store. The bearer path is
+unchanged and nothing falls back between them. Signing covers the exact serialized body, so it
+happens in an overridden `json` rather than in `request`, which cannot see the body.
+
+**First live Bedrock call in the project's history**: the provider contract passes 4/4 against
+`us.anthropic.claude-haiku-4-5-20251001-v1:0` in us-east-1 in 14 seconds. A bare model id returns
+404; Bedrock needs an **inference profile id**, listed by
+`aws bedrock list-inference-profiles --region us-east-1`.
+
+**Like-for-like on the same 35-case gold set:**
+
+| | Precision | Recall (all 35) | Recall (clear-cut 25) | Duration |
+|---|---|---|---|---|
+| Bedrock Claude Haiku 4.5 | 100% | 73.3% | 80% | **85 s** |
+| Local `qwen3.5:4b` | 100% | **80%** | **90%** | 218 s |
+
+**Zero false positives from both**, across all 35 cases including the legitimate-promotional traps.
+The cloud model is 2.5× faster and *slightly worse* at recall — it additionally misses
+`formulaic-opener-world`. Both miss `ai-assisted-residual`, `vague-tagline` and
+`negation-reframe-nojust`.
+
+That result matters for the latency plan: **a faster model does not buy better detection here**,
+which is consistent with the earlier finding that the model half contributes almost nothing and
+the deterministic rules are carrying the product.
+
+**Cost constraint from the user:** Bedrock testing must prefer cost-effective, large-context
+models — Claude Haiku 4.5, or the cheaper Amazon Nova Lite and Micro profiles — not Sonnet-class
+models, except for a deliberate quality comparison.
 
 ## Session of 2026-09-28, later: Amazon Bedrock support (ADR-041)
 

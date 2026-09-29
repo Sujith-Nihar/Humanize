@@ -23,6 +23,7 @@ export interface ReviewPorts {
 export interface ReviewOptions extends RoutingOptions {
   minimumSeverity?:'major'|'minor'|'nit';
   confidenceThreshold?:number;
+  verificationThreshold?:number;
   timeoutMs?:number;
   signal?:AbortSignal;
   marker?:string;
@@ -32,7 +33,21 @@ export interface ReviewOutcome { findings:ValidatedFinding[]; suppressed:Suppres
 
 const SEVERITY_RANK={nit:0,minor:1,major:2} as const;
 /** The architecture starts both thresholds at 0.90; these are heuristics, not probabilities. */
-export const DEFAULT_CONFIDENCE=0.9;
+/**
+ * Two different numbers, because they mean different things.
+ *
+ * A reviewer's confidence is self-reported by a model about its own output, which the
+ * architecture already calls a heuristic rather than a calibrated probability. Cutting at 0.90
+ * discarded candidates before the verifier could judge them, doing the verifier's job with far
+ * less information: measured across 35 labelled cases on two models, that threshold was the
+ * only thing suppressing anything, and lowering it recovered real findings while precision
+ * stayed at 100%.
+ *
+ * A verifier's confidence is a considered judgement made against the evidence, so it keeps the
+ * high bar. The reviewer proposes broadly; the verifier decides (ADR-042).
+ */
+export const DEFAULT_CONFIDENCE=0.6;
+export const DEFAULT_VERIFICATION_CONFIDENCE=0.9;
 
 function boundaryMarker():string {
   // Unguessable per review, so quoted repository text cannot terminate its own fence.
@@ -81,6 +96,7 @@ interface Prepared { node:ContentNode; unit:ReviewableUnit; routing:RoutingDecis
 export async function reviewNodes(snapshot:ReviewSnapshot,nodes:readonly ContentNode[],ports:ReviewPorts,options:ReviewOptions):Promise<ReviewOutcome> {
   const marker=options.marker??boundaryMarker();
   const threshold=options.confidenceThreshold??DEFAULT_CONFIDENCE;
+  const verificationThreshold=options.verificationThreshold??DEFAULT_VERIFICATION_CONFIDENCE;
   const minimum=SEVERITY_RANK[options.minimumSeverity??'minor'];
   const timeoutMs=options.timeoutMs??60000;
   const findingsByNode=new Map<string,ValidatedFinding[]>(nodes.map(node=>[node.id,[]]));
@@ -194,7 +210,7 @@ export async function reviewNodes(snapshot:ReviewSnapshot,nodes:readonly Content
         const verdict=byIdentity.get(candidateDigest(candidate));
         // No verdict means unverified, and unverified never publishes.
         if(!verdict){suppressed.push({nodeId:item.node.id,category:candidate.category,reason:'verifier_missing_verdict'});continue;}
-        if(!verdict.publish||verdict.confidence<threshold){suppressed.push({nodeId:item.node.id,category:candidate.category,reason:'verifier_suppressed'});continue;}
+        if(!verdict.publish||verdict.confidence<verificationThreshold){suppressed.push({nodeId:item.node.id,category:candidate.category,reason:'verifier_suppressed'});continue;}
         // A verifier's corrections are model output like any other, so they are revalidated
         // rather than trusted: a correction that drops a placeholder, or that echoes the
         // instructions instead of addressing the author, is discarded and the reviewer's
