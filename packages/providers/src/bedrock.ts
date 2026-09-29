@@ -1,5 +1,9 @@
 import { z } from 'zod';
 import type { ModelRequest } from '@humanize/domain';
+import { Sha256 } from '@aws-crypto/sha256-js';
+import { HttpRequest } from '@smithy/protocol-http';
+import { SignatureV4 } from '@smithy/signature-v4';
+import type { AwsCredentialIdentityProvider } from '@smithy/types';
 import { JsonProvider,envelope,repairSystem } from './base.js';
 import type { AdapterOptions,Decoded } from './base.js';
 import { ProviderError } from './errors.js';
@@ -34,21 +38,54 @@ export function bedrockSchema(value:unknown):unknown {
 const REGION=/^[a-z]{2}(?:-gov)?-[a-z]+-\d$/;
 
 /**
- * Amazon Bedrock through the Converse API, authenticated with a Bedrock API key as a bearer
- * token (ADR-041). The endpoint is fixed to bedrock-runtime in one administrator-chosen region,
- * so neither repository content nor a model identifier can redirect a request elsewhere.
+ * Amazon Bedrock through the Converse API (ADR-041). Two authentications are supported because
+ * AWS offers two: a Bedrock API key sent as a bearer token, and ordinary AWS credentials signed
+ * with SigV4. Signing is preferred where credentials exist, since a role or SSO session is
+ * short-lived while an API key is a long-lived secret that has to be stored somewhere.
+ *
+ * The endpoint is fixed to bedrock-runtime in one administrator-chosen region, so neither
+ * repository content nor a model identifier can redirect a request elsewhere.
  */
 export class BedrockProvider extends JsonProvider {
   readonly id='bedrock' as const;
   private readonly endpoint:string;
-  constructor(private readonly key:string,region:string,options:AdapterOptions={}){
+  private readonly host:string;
+  private readonly region:string;
+  private readonly credentials:AwsCredentialIdentityProvider|undefined;
+
+  constructor(key:string|null,region:string,options:AdapterOptions&{credentials?:AwsCredentialIdentityProvider}={}){
     super(options);
-    if(!key)throw new ProviderError('AUTH');
     if(!REGION.test(region))throw new ProviderError('PERMISSION');
-    this.endpoint=`https://bedrock-runtime.${region}.amazonaws.com`;
+    // One or the other, never neither: an unauthenticated Bedrock call is a configuration fault.
+    if(!key&&!options.credentials)throw new ProviderError('AUTH');
+    this.key=key;
+    this.credentials=options.credentials;
+    this.region=region;
+    this.host=`bedrock-runtime.${region}.amazonaws.com`;
+    this.endpoint=`https://${this.host}`;
+  }
+  private readonly key:string|null;
+
+  /**
+   * Signs with SigV4 when credentials are configured. The signature covers the exact body that
+   * will be sent, so signing happens here rather than in `request`, which cannot see it.
+   */
+  protected override async json(url:string,init:RequestInit,signal:AbortSignal):Promise<unknown> {
+    if(!this.credentials)return super.json(url,init,signal);
+    const target=new URL(url);
+    const signer=new SignatureV4({service:'bedrock',region:this.region,credentials:this.credentials,sha256:Sha256});
+    const signed=await signer.sign(new HttpRequest({
+      method:'POST',protocol:target.protocol,hostname:target.hostname,path:target.pathname,
+      // `host` must be present and must match what is dialled, or the signature is rejected.
+      headers:{host:target.hostname,'content-type':'application/json'},
+      body:typeof init.body==='string'?init.body:undefined,
+    }));
+    return super.json(url,{...init,headers:signed.headers},signal);
   }
   protected request<T>(args:ModelRequest<T>,schema:Record<string,unknown>,repair:boolean){return {
-    url:`${this.endpoint}/model/${encodeURIComponent(args.model)}/converse`,headers:{authorization:`Bearer ${this.key}`},
+    url:`${this.endpoint}/model/${encodeURIComponent(args.model)}/converse`,
+    // A signed request gets its authorization from the signer instead.
+    headers:this.key?{authorization:`Bearer ${this.key}`}:{},
     body:{
       system:[{text:repairSystem(args.system,repair)}],
       messages:[{role:'user',content:[{text:args.input}]}],

@@ -1,16 +1,18 @@
 import { expect,it } from 'vitest';
 import { ReviewerResponseSchema,VerificationSchema,candidateDigest,z } from '@humanize/domain';
+import { fromNodeProviderChain } from '@aws-sdk/credential-providers';
 import { BedrockProvider } from './src/index.js';
 
 /**
  * Live Bedrock contract (ADR-041). AWS_BEARER_TOKEN_BEDROCK is the variable AWS documents for a
  * Bedrock API key; the model must support structured output in the chosen region.
  */
-const key=process.env.AWS_BEARER_TOKEN_BEDROCK;
+const key=process.env.AWS_BEARER_TOKEN_BEDROCK??null;
 const region=process.env.HUMANIZE_BEDROCK_REGION;
 const model=process.env.HUMANIZE_BEDROCK_MODEL;
-if(!key||!region||!model)throw Error('Set AWS_BEARER_TOKEN_BEDROCK, HUMANIZE_BEDROCK_REGION and HUMANIZE_BEDROCK_MODEL; a live test is never silently skipped.');
-const provider=new BedrockProvider(key,region);
+if(!region||!model)throw Error('Set HUMANIZE_BEDROCK_REGION and HUMANIZE_BEDROCK_MODEL; a live test is never silently skipped.');
+// A Bedrock API key if one is set, otherwise ordinary AWS credentials signed with SigV4.
+const provider=new BedrockProvider(key,region,key?{}:{credentials:fromNodeProviderChain()});
 const trace={traceId:'live-contract'};
 
 it('passes the application-shaped capability probe', async () => {
