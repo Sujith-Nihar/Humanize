@@ -50,6 +50,13 @@
       "when": 1789764312798,
       "tag": "0006_medical_sally_floyd",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790721001304,
+      "tag": "0007_unknown_baron_strucker",
+      "breakpoints": true
     }
   ]
 }

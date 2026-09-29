@@ -9,4 +9,4 @@ export type { ExtensionDevConfig } from './extension-dev.js';
 export { publishResult } from './publish.js';
 export type { PublishPorts,PublishRequest } from './publish.js';
 export { registerAdminRoutes,sessionOf } from './admin.js';
-export type { AdminOptions,CredentialAdmin,IdentityProvider,RepositoryAdmin } from './admin.js';
+export type { AdminOptions,CredentialAdmin,IdentityProvider,RepositoryAdmin,RunnerAdmin } from './admin.js';

@@ -27,7 +27,7 @@ beforeAll(async()=>{
 afterAll(async()=>{expect(scopedToken).not.toHaveBeenCalled();await app.close();await db.close();});
 
 it('registers a runner over HTTP and stores only the credential hash',async()=>{
-  const response=await register(await store.enrollment(org,[repo]));
+  const response=await register((await store.enrollment(org,[repo])).token);
   expect(response.statusCode).toBe(201);
   const {runnerId,credential}=response.json<{runnerId:string;credential:string}>();
   expect((await heartbeat(credential)).statusCode).toBe(204);
@@ -38,7 +38,7 @@ it('registers a runner over HTTP and stores only the credential hash',async()=>{
 });
 
 it('consumes an enrollment token exactly once across concurrent HTTP registrations',async()=>{
-  const token=await store.enrollment(org,[repo]);
+  const token=(await store.enrollment(org,[repo])).token;
   const responses=await Promise.all([register(token),register(token)]);
   expect(responses.filter(response=>response.statusCode===201)).toHaveLength(1);
   expect(responses.filter(response=>response.statusCode===401)).toHaveLength(1);
@@ -46,14 +46,14 @@ it('consumes an enrollment token exactly once across concurrent HTTP registratio
 });
 
 it('refuses expired and unknown enrollment tokens over HTTP',async()=>{
-  const token=await store.enrollment(org,[repo]);
+  const token=(await store.enrollment(org,[repo])).token;
   await db.pool.query("UPDATE runner_enrollments SET expires_at=now()-interval '1 second' WHERE organization_id=$1 AND consumed_at IS NULL",[org]);
   expect((await register(token)).statusCode).toBe(401);
   expect((await register(opaqueToken())).statusCode).toBe(401);
 });
 
 it('stops accepting a revoked credential and never accepts a forged one',async()=>{
-  const {runnerId,credential}=(await register(await store.enrollment(org,[repo]))).json<{runnerId:string;credential:string}>();
+  const {runnerId,credential}=(await register((await store.enrollment(org,[repo])).token)).json<{runnerId:string;credential:string}>();
   expect((await heartbeat(credential)).statusCode).toBe(204);
   await store.revoke(org,runnerId);
   expect((await heartbeat(credential)).statusCode).toBe(401);
@@ -62,7 +62,7 @@ it('stops accepting a revoked credential and never accepts a forged one',async()
 
 it('keeps an enrollment token of one tenant from covering another tenant repository',async()=>{
   await expect(store.enrollment(org,[otherRepo])).rejects.toThrow('INVALID_SCOPE');
-  const foreign=(await register(await store.enrollment(otherOrg,[otherRepo]))).json<{credential:string}>();
+  const foreign=(await register((await store.enrollment(otherOrg,[otherRepo])).token)).json<{credential:string}>();
   const scoped=await db.pool.query<{organization_id:string;repository_ids:string[]}>('SELECT organization_id,repository_ids FROM runners WHERE credential_hash IS NOT NULL ORDER BY created_at DESC LIMIT 1');
   expect(scoped.rows[0]).toMatchObject({organization_id:otherOrg,repository_ids:[otherRepo]});
   expect((await heartbeat(foreign.credential)).statusCode).toBe(204);

@@ -26,7 +26,7 @@ beforeAll(async()=>{
 });
 afterAll(async()=>db.close());
 it('consumes enrollment exactly once under concurrent registration',async()=>{
-  const token=await store.enrollment(org,[repo]);const outcomes=await Promise.allSettled([store.register(token,capabilities),store.register(token,capabilities)]);
+  const token=(await store.enrollment(org,[repo])).token;const outcomes=await Promise.allSettled([store.register(token,capabilities),store.register(token,capabilities)]);
   expect(outcomes.filter(r=>r.status==='fulfilled')).toHaveLength(1);
   const value=outcomes.find(r=>r.status==='fulfilled');if(value?.status!=='fulfilled')throw Error('missing registration');credential=value.value.credential;runnerId=value.value.runnerId;
 });
@@ -91,7 +91,7 @@ it('gives concurrent claims one fenced lease each',async()=>{
   await store.fail(credential,granted[0]!.leaseId,granted[0]!.fence,false);
 });
 it('keeps runners of one tenant away from another tenant work',async()=>{
-  const token=await store.enrollment(otherOrg,[otherRepo]);const foreign=await store.register(token,capabilities);
+  const token=(await store.enrollment(otherOrg,[otherRepo])).token;const foreign=await store.register(token,capabilities);
   const queued=await new RunStore(db).create({...snapshot,pullNumber:4},1);await store.enqueue(org,repo,queued);
   expect(await store.claim(foreign.credential)).toBeNull();
   await expect(store.accept(foreign.credential,envelope(lease!))).rejects.toThrow('LEASE_MISMATCH');
@@ -109,8 +109,62 @@ it('refuses enrollment scopes outside the organization',async()=>{
   await expect(store.enrollment(org,[otherRepo])).rejects.toThrow('INVALID_SCOPE');
 });
 it('refuses expired and already consumed enrollment tokens',async()=>{
-  const token=await store.enrollment(org,[repo]);
+  const token=(await store.enrollment(org,[repo])).token;
   await db.pool.query("UPDATE runner_enrollments SET expires_at=now()-interval '1 second' WHERE organization_id=$1 AND consumed_at IS NULL",[org]);
   await expect(store.register(token,capabilities)).rejects.toThrow('INVALID_ENROLLMENT');
   await expect(store.register(opaqueToken(),capabilities)).rejects.toThrow('INVALID_ENROLLMENT');
+});
+
+it('records who authorised an invitation and refuses one for a repository the caller cannot administer', async () => {
+  const authorised=await store.enrollment(org,[repo],{createdBy:'user-1',check:async ids=>ids});
+  expect(authorised.token).toHaveLength(43);
+  expect(Date.parse(authorised.expiresAt)).toBeGreaterThan(Date.now());
+  const listed=await store.enrollments(org);
+  const record=listed.find(e=>e.id===authorised.id)!;
+  expect(record).toMatchObject({createdBy:'user-1',state:'pending',repositoryIds:[repo]});
+  // The token is returned once and never appears in a listing, because only its hash is stored.
+  expect(JSON.stringify(listed)).not.toContain(authorised.token);
+
+  // A partial grant would quietly widen the runner's scope beyond what the caller authorised.
+  await expect(store.enrollment(org,[repo],{createdBy:'user-1',check:async()=>[]})).rejects.toThrow('FORBIDDEN');
+});
+
+it('cancels a pending invitation, and refuses to rewrite history for a used one', async () => {
+  const pending=await store.enrollment(org,[repo],{createdBy:'user-1'});
+  expect(await store.revokeEnrollment(org,pending.id)).toBe(true);
+  expect((await store.enrollments(org)).find(e=>e.id===pending.id)).toMatchObject({state:'revoked'});
+  // A revoked invitation is no longer redeemable.
+  await expect(store.register(pending.token,capabilities)).rejects.toThrow('INVALID_ENROLLMENT');
+  expect(await store.revokeEnrollment(org,pending.id)).toBe(false);
+
+  const used=await store.enrollment(org,[repo],{createdBy:'user-1'});
+  const registered=await store.register(used.token,capabilities);
+  // Cancelling afterwards must never make a used invitation look as though it never was.
+  expect(await store.revokeEnrollment(org,used.id)).toBe(false);
+  expect((await store.enrollments(org)).find(e=>e.id===used.id)).toMatchObject({state:'consumed'});
+  await store.revoke(org,registered.runnerId);
+});
+
+it('reports runner liveness and revocation without exposing a credential', async () => {
+  const invitation=await store.enrollment(org,[repo],{createdBy:'user-1'});
+  const registered=await store.register(invitation.token,capabilities);
+  const live=(await store.runners(org)).find(r=>r.id===registered.runnerId)!;
+  expect(live).toMatchObject({online:true,revoked:false,version:'0.1.0'});
+  expect(JSON.stringify(live)).not.toContain(registered.credential);
+
+  // Liveness is measured by the database clock, so a stale heartbeat reads as offline.
+  await db.pool.query("UPDATE runners SET last_heartbeat=now()-interval '5 minutes' WHERE id=$1",[registered.runnerId]);
+  expect((await store.runners(org)).find(r=>r.id===registered.runnerId)).toMatchObject({online:false});
+  await store.revoke(org,registered.runnerId);
+  expect((await store.runners(org)).find(r=>r.id===registered.runnerId)).toMatchObject({revoked:true,online:false});
+});
+
+it('keeps one organization out of another organization runners and invitations', async () => {
+  const invitation=await store.enrollment(org,[repo],{createdBy:'user-1'});
+  expect(await store.enrollments(otherOrg)).not.toContainEqual(expect.objectContaining({id:invitation.id}));
+  expect(await store.revokeEnrollment(otherOrg,invitation.id)).toBe(false);
+  // The other organization has runners of its own; none of this organization's may appear there.
+  const mine=new Set((await store.runners(org)).map(r=>r.id));
+  expect((await store.runners(otherOrg)).some(r=>mine.has(r.id))).toBe(false);
+  await store.revokeEnrollment(org,invitation.id);
 });

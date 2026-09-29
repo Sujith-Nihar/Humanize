@@ -36,7 +36,7 @@ beforeAll(async()=>{
   }
   const profile={provider:'ollama' as const,model:'fixture',credentialRef:null,maxInputTokens:12000,maxOutputTokens:4000,evaluatedLanguages:['en']};
   snapshot={version:1,organizationId:org,repositoryId:repo,installationId:installation,owner:'acme',repository:'site',pullNumber:1,baseSha:'a'.repeat(40),headSha:'b'.repeat(40),configSha:'c'.repeat(40),configHash:'config',executionMode:'runner',retentionMode:'ephemeral',reviewer:profile,verifier:profile,language:'en',allowUnevaluatedLanguage:false};
-  ({credential}=await store.register(await store.enrollment(org,[repo]),capabilities));
+  ({credential}=await store.register((await store.enrollment(org,[repo])).token,capabilities));
 },30000);
 afterAll(async()=>{await app.close();await db.close();});
 
@@ -81,7 +81,7 @@ it('rejects a stale fence, a foreign runner and a mismatched snapshot digest',as
   const lease=await claimed();
   expect((await upload(lease.leaseId,envelope({...lease,fence:lease.fence+1}))).statusCode).toBe(409);
   expect((await upload(lease.leaseId,envelope(lease,{snapshotHash:snapshotDigest({...snapshot,headSha:'c'.repeat(40)})}))).statusCode).toBe(409);
-  const foreign=await store.register(await store.enrollment(otherOrg,[otherRepo]),capabilities);
+  const foreign=await store.register((await store.enrollment(otherOrg,[otherRepo])).token,capabilities);
   expect((await upload(lease.leaseId,envelope(lease),foreign.credential)).statusCode).toBe(409);
   await store.revoke(otherOrg,foreign.runnerId);
 });

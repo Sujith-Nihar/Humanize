@@ -20,7 +20,7 @@ const tenant=async(organization:string,repository:string,install:number,githubId
   await db.pool.query('INSERT INTO github_installations(id,organization_id) VALUES($1,$2)',[install,organization]);
   await db.pool.query('INSERT INTO repositories(id,organization_id,installation_id,github_repository_id,owner,name,enabled) VALUES($1,$2,$3,$4,$5,$6,true)',[repository,organization,install,githubId,'acme','site']);
 };
-const enrolled=async(organization:string,repository:string)=>store.register(await store.enrollment(organization,[repository]),capabilities);
+const enrolled=async(organization:string,repository:string)=>store.register((await store.enrollment(organization,[repository])).token,capabilities);
 /** Claims a fresh lease so each case starts from a live one. */
 const claimed=async(runner=credential)=>{
   const run=await runs.create({...snapshot,pullNumber:++pull},1);

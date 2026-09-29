@@ -30,7 +30,7 @@ beforeAll(async()=>{
   const profile={provider:'ollama' as const,model:'fixture',credentialRef:null,maxInputTokens:12000,maxOutputTokens:4000,evaluatedLanguages:['en']};
   snapshot={version:1,organizationId:org,repositoryId:repo,installationId:installation,owner:'acme',repository:'site',pullNumber:1,baseSha:'a'.repeat(40),headSha:'b'.repeat(40),configSha:'c'.repeat(40),configHash:'config',executionMode:'runner',retentionMode:'ephemeral',reviewer:profile,verifier:profile,language:'en',allowUnevaluatedLanguage:false};
   client=new RunnerClient({controlPlaneUrl:'http://control.test/',fetch:inject});
-  runnerId=await client.register(await store.enrollment(org,[repo]),capabilities);
+  runnerId=await client.register((await store.enrollment(org,[repo])).token,capabilities);
 },30000);
 afterAll(async()=>{await app.close();await db.close();});
 

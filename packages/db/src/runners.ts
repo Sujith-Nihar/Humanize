@@ -14,18 +14,66 @@ export class RunnerStore {
     const result=await tx.query<RunnerRow>('SELECT id,organization_id,repository_ids,capabilities FROM runners WHERE credential_hash=$1 AND revoked_at IS NULL FOR UPDATE',[tokenHash(credential)]);
     if(!result.rows[0])throw Error('RUNNER_UNAUTHORIZED');return result.rows[0];
   }
-  async enrollment(organizationId:string,repositoryIds:string[]):Promise<string>{
+  /**
+   * Mints a single-use invitation a runner exchanges for its credential. The administrator check
+   * runs inside the transaction with the repository rows held, so rights cannot lapse between the
+   * check and the write, and the author is recorded because issuing a runner credential is a
+   * privileged act someone must be accountable for. The token is returned once and stored only
+   * as a hash, so it can never be read back.
+   */
+  async enrollment(organizationId:string,repositoryIds:string[],options:{createdBy?:string;check?:(ids:readonly string[])=>Promise<readonly string[]>}={}):Promise<{token:string;id:string;expiresAt:string}>{
     if(!repositoryIds.length||new Set(repositoryIds).size!==repositoryIds.length)throw Error('INVALID_SCOPE');
     return this.db.transaction(async tx=>{
-      const repos=await tx.query('SELECT id FROM repositories WHERE organization_id=$1 AND id=ANY($2::uuid[]) AND enabled=true FOR SHARE',[organizationId,repositoryIds]);
+      const repos=await tx.query<{id:string}>('SELECT id FROM repositories WHERE organization_id=$1 AND id=ANY($2::uuid[]) AND enabled=true FOR SHARE',[organizationId,repositoryIds]);
       if(repos.rowCount!==repositoryIds.length)throw Error('INVALID_SCOPE');
-      const token=opaqueToken();await tx.query("INSERT INTO runner_enrollments(organization_id,token_hash,repository_ids,expires_at) VALUES($1,$2,$3,now()+interval '10 minutes')",[organizationId,tokenHash(token),repositoryIds]);return token;
+      if(options.check){
+        const permitted=new Set(await options.check(repos.rows.map(row=>row.id)));
+        // Every named repository must be administrable: a partial grant would quietly widen
+        // the runner's scope beyond what the caller was entitled to authorise.
+        if(repositoryIds.some(id=>!permitted.has(id)))throw Error('FORBIDDEN');
+      }
+      const token=opaqueToken();
+      const inserted=await tx.query<{id:string;expires_at:Date}>("INSERT INTO runner_enrollments(organization_id,token_hash,repository_ids,created_by,expires_at) VALUES($1,$2,$3,$4,now()+interval '10 minutes') RETURNING id,expires_at",[organizationId,tokenHash(token),repositoryIds,options.createdBy??null]);
+      const row=inserted.rows[0]!;
+      return {token,id:row.id,expiresAt:row.expires_at.toISOString()};
     });
+  }
+
+  /** Outstanding and past invitations. No token or hash is ever returned. */
+  async enrollments(organizationId:string):Promise<{id:string;repositoryIds:string[];createdBy:string|null;createdAt:string;expiresAt:string;state:'pending'|'consumed'|'expired'|'revoked'}[]>{
+    const rows=await this.db.pool.query<{id:string;repository_ids:string[];created_by:string|null;created_at:Date;expires_at:Date;consumed_at:Date|null;revoked_at:Date|null;expired:boolean}>(
+      'SELECT id,repository_ids,created_by,created_at,expires_at,consumed_at,revoked_at,expires_at<=now() AS expired FROM runner_enrollments WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 200',[organizationId]);
+    return rows.rows.map(row=>({
+      id:row.id,repositoryIds:row.repository_ids,createdBy:row.created_by,
+      createdAt:row.created_at.toISOString(),expiresAt:row.expires_at.toISOString(),
+      // Consumption is reported ahead of revocation: an invitation that was used stays used,
+      // and cancelling afterwards must never make it look as though it never was.
+      state:row.consumed_at?'consumed':row.revoked_at?'revoked':row.expired?'expired':'pending',
+    }));
+  }
+
+  /** Cancels an invitation that has not been used. A consumed one is history, not a live grant. */
+  async revokeEnrollment(organizationId:string,id:string):Promise<boolean>{
+    const result=await this.db.pool.query(
+      'UPDATE runner_enrollments SET revoked_at=now() WHERE organization_id=$1 AND id=$2 AND consumed_at IS NULL AND revoked_at IS NULL',[organizationId,id]);
+    return result.rowCount===1;
+  }
+
+  /** Registered runners with their liveness, so an administrator can see and revoke them. */
+  async runners(organizationId:string,offlineAfterMs=90000):Promise<{id:string;repositoryIds:string[];version:string;models:number;online:boolean;lastHeartbeat:string;revoked:boolean}[]>{
+    const rows=await this.db.pool.query<{id:string;repository_ids:string[];capabilities:RunnerCapabilities;last_heartbeat:Date;revoked_at:Date|null;age_ms:string}>(
+      'SELECT id,repository_ids,capabilities,last_heartbeat,revoked_at,extract(epoch from (now()-last_heartbeat))*1000 AS age_ms FROM runners WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 200',[organizationId]);
+    return rows.rows.map(row=>({
+      id:row.id,repositoryIds:row.repository_ids,version:row.capabilities.version,models:row.capabilities.models.length,
+      // Liveness is measured by the database clock, never this process's (ADR recorded earlier).
+      online:row.revoked_at===null&&Number(row.age_ms)<offlineAfterMs,
+      lastHeartbeat:row.last_heartbeat.toISOString(),revoked:row.revoked_at!==null,
+    }));
   }
   async register(token:string,capabilities:RunnerCapabilities):Promise<{runnerId:string;credential:string}>{
     const caps=RunnerCapabilitiesSchema.parse(capabilities);
     return this.db.transaction(async tx=>{
-      const enrollment=await tx.query<{organization_id:string;repository_ids:string[]}>('UPDATE runner_enrollments SET consumed_at=now() WHERE token_hash=$1 AND consumed_at IS NULL AND expires_at>now() RETURNING organization_id,repository_ids',[tokenHash(token)]);
+      const enrollment=await tx.query<{organization_id:string;repository_ids:string[]}>('UPDATE runner_enrollments SET consumed_at=now() WHERE token_hash=$1 AND consumed_at IS NULL AND revoked_at IS NULL AND expires_at>now() RETURNING organization_id,repository_ids',[tokenHash(token)]);
       if(!enrollment.rows[0])throw Error('INVALID_ENROLLMENT');const row=enrollment.rows[0];const credential=opaqueToken(),runnerId=randomUUID();
       await tx.query('INSERT INTO runners(id,organization_id,credential_hash,repository_ids,capabilities) VALUES($1,$2,$3,$4,$5)',[runnerId,row.organization_id,tokenHash(credential),row.repository_ids,JSON.stringify(caps)]);return {runnerId,credential};
     });

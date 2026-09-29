@@ -22,14 +22,26 @@ export interface RepositoryAdmin {
   policy(organizationId: string): Promise<unknown | null>;
   setPolicy(organizationId: string, policy: unknown): Promise<void>;
 }
+/**
+ * Runner administration. Creating an enrollment mints a credential, so the store performs the
+ * administrator check inside the write; a session alone never decides what a runner may reach.
+ */
+export interface RunnerAdmin {
+  createEnrollment(organizationId:string,repositoryIds:string[],createdBy:string):Promise<{token:string;id:string;expiresAt:string}>;
+  enrollments(organizationId:string):Promise<{id:string;repositoryIds:string[];createdBy:string|null;createdAt:string;expiresAt:string;state:string}[]>;
+  revokeEnrollment(organizationId:string,id:string):Promise<boolean>;
+  runners(organizationId:string):Promise<{id:string;online:boolean;revoked:boolean}[]>;
+  revokeRunner(organizationId:string,runnerId:string):Promise<void>;
+}
 export interface AdminOptions {
   sessions: SessionSigner; identity: IdentityProvider; credentials: CredentialAdmin;
-  repositories?: RepositoryAdmin; secureCookies?: boolean;
+  repositories?: RepositoryAdmin; runnerAdmin?: RunnerAdmin; secureCookies?: boolean;
 }
 
 interface Refusal { code: 401 | 403; error: 'NOT_SIGNED_IN' | 'FORBIDDEN' }
 const SESSION_COOKIE = 'humanize_session';
 const STATE_COOKIE = 'humanize_oauth_state';
+const CreateEnrollment = z.object({ organizationId: z.string().min(1).max(200), repositoryIds: z.array(z.string().uuid()).min(1).max(100) }).strict();
 const SetEnabled = z.object({ organizationId: z.string().min(1).max(200), repositoryIds: z.array(z.string().uuid()).min(1).max(500), enabled: z.boolean() }).strict();
 const SaveCredential = z.object({ organizationId: z.string().min(1).max(200), provider: ProviderId, secret: z.string().min(8).max(65536) }).strict();
 
@@ -150,6 +162,69 @@ export function registerAdminRoutes(app: FastifyInstance, options: AdminOptions)
       const refused = refuse(request, body.organizationId);
       if (refused) return reply.code(refused.code).send({ error: refused.error });
       await admin.setPolicy(body.organizationId, body.policy);
+      return reply.code(204).send();
+    });
+  }
+
+  if (options.runnerAdmin) {
+    const runnerAdmin = options.runnerAdmin;
+    const refuseRunner = (request: FastifyRequest, organizationId: string): Refusal | null => {
+      const claims = sessionOf(request, options.sessions);
+      if (claims && claims.organizationIds.includes(organizationId)) return null;
+      return claims ? { code: 403, error: 'FORBIDDEN' } : { code: 401, error: 'NOT_SIGNED_IN' };
+    };
+
+    app.post('/api/runner/enrollments', async (request, reply) => {
+      const parsed = CreateEnrollment.safeParse(request.body ?? {});
+      if (!parsed.success) return reply.code(400).send({ error: 'INVALID_REQUEST' });
+      const refused = refuseRunner(request, parsed.data.organizationId);
+      if (refused) return reply.code(refused.code).send({ error: refused.error });
+      const claims = sessionOf(request, options.sessions)!;
+      try {
+        const created = await runnerAdmin.createEnrollment(parsed.data.organizationId, parsed.data.repositoryIds, claims.userId);
+        // Returned exactly once. Only a hash is stored, so this value can never be read back,
+        // and an administrator who loses it creates another rather than recovering this one.
+        return reply.code(201).send({ id: created.id, token: created.token, expiresAt: created.expiresAt });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : '';
+        if (message === 'FORBIDDEN') return reply.code(403).send({ error: 'NOT_A_REPOSITORY_ADMIN' });
+        if (message === 'INVALID_SCOPE') return reply.code(400).send({ error: 'INVALID_SCOPE' });
+        return reply.code(503).send({ error: 'RUNNER_SERVICE_UNAVAILABLE' });
+      }
+    });
+
+    app.get('/api/runner/enrollments', async (request, reply) => {
+      const organizationId = (request.query as { organizationId?: string }).organizationId ?? '';
+      const refused = refuseRunner(request, organizationId);
+      if (refused) return reply.code(refused.code).send({ error: refused.error });
+      // Metadata only: who minted each invitation, its scope and its state, never the token.
+      return reply.code(200).send({ enrollments: await runnerAdmin.enrollments(organizationId) });
+    });
+
+    app.delete('/api/runner/enrollments/:id', async (request, reply) => {
+      const organizationId = (request.query as { organizationId?: string }).organizationId ?? '';
+      const refused = refuseRunner(request, organizationId);
+      if (refused) return reply.code(refused.code).send({ error: refused.error });
+      const { id } = request.params as { id: string };
+      const cancelled = await runnerAdmin.revokeEnrollment(organizationId, id);
+      // An invitation already used cannot be cancelled: revoke the runner it created instead.
+      return cancelled ? reply.code(204).send() : reply.code(409).send({ error: 'ENROLLMENT_NOT_PENDING' });
+    });
+
+    app.get('/api/runners', async (request, reply) => {
+      const organizationId = (request.query as { organizationId?: string }).organizationId ?? '';
+      const refused = refuseRunner(request, organizationId);
+      if (refused) return reply.code(refused.code).send({ error: refused.error });
+      return reply.code(200).send({ runners: await runnerAdmin.runners(organizationId) });
+    });
+
+    app.delete('/api/runners/:id', async (request, reply) => {
+      const organizationId = (request.query as { organizationId?: string }).organizationId ?? '';
+      const refused = refuseRunner(request, organizationId);
+      if (refused) return reply.code(refused.code).send({ error: refused.error });
+      const { id } = request.params as { id: string };
+      // Revocation cancels live leases as well as the credential, so work stops immediately.
+      await runnerAdmin.revokeRunner(organizationId, id);
       return reply.code(204).send();
     });
   }
