@@ -1,9 +1,15 @@
-import { AdministrationStore,Database,PublicationStore,RunStore,RunnerStore,migrate } from '@humanize/db';
+import { AdministrationStore,Database,EncryptedSecretStore,PublicationStore,RunStore,RunnerStore,migrate } from '@humanize/db';
 import { JobQueue } from '@humanize/queue';
 import { GitHubEventSchema } from '@humanize/domain';
 import { LIMITS } from '@humanize/domain';
 import type { ReviewSnapshot } from '@humanize/domain';
 import { GitHubFileSource,GitHubTokenBroker,ReviewPublisher,StaleHeadError,buildCheck,buildReview,fetchDiffMap,githubClient } from '@humanize/github';
+import { createProvider } from '@humanize/providers';
+import { cipherFromEnvironment } from '@humanize/security';
+import { executeReview } from '@humanize/execution';
+import { Category } from '@humanize/domain';
+import type { CategoryName } from '@humanize/review';
+import { executeCloudReview } from './cloud-worker.js';
 import { attachSuggestions,findingsFromResult,planPublication } from '@humanize/review';
 import { handleGitHubEvent } from './handlers.js';
 import { publishReview } from './publish-worker.js';
@@ -31,6 +37,19 @@ if(!config)console.log(JSON.stringify({event:'worker.no_github_app',message:'GIT
 
 // Anything a previous process left behind is removed before new work is taken, so content
 // never outlives a crash by longer than one restart (ADR-038).
+// Cloud execution needs three things a deployment may legitimately not have: keys to decrypt
+// a stored provider credential, App credentials to clone, and a Bedrock region if Bedrock is
+// the provider. What is missing is said once at startup, and a cloud run is then refused with
+// a named reason rather than silently running somewhere else.
+const cipher=cipherFromEnvironment();
+const deployment={bedrockRegion:process.env.HUMANIZE_BEDROCK_REGION,ollamaBaseUrl:process.env.HUMANIZE_CLOUD_OLLAMA_BASE_URL};
+const cloudEnabled=Boolean(cipher&&broker);
+if(!cloudEnabled)console.log(JSON.stringify({event:'worker.no_cloud_execution',
+  message:'HUMANIZE_ENCRYPTION_KEYS and the GitHub App credentials are required to execute a cloud review; cloud runs are refused until both are configured.'}));
+// Every category the organisation permits was already applied to the snapshot; the executor
+// enables them all and lets the snapshot's own policy do the narrowing.
+const enabled=Object.fromEntries(Category.options.map(category=>[category,true])) as Record<CategoryName,boolean>;
+
 const swept=await publications.sweep();
 if(swept)console.log(JSON.stringify({event:'publication.swept',count:swept}));
 
@@ -62,10 +81,59 @@ await queue.work('pull_request.review',async payload=>{
         state:row.state,attempt:row.attempt,snapshot:row.snapshot};
     },
     runners:{enqueue:async(organizationId,repositoryId,runId)=>{await runners.enqueue(organizationId,repositoryId,runId);}},
+    // Present only when this deployment can actually execute one; absent, dispatchReview
+    // reports cloud_execution_unavailable instead of queueing work nothing will take.
+    ...(cloudEnabled?{cloud:{enqueue:async record=>{await queue.send('review.cloud_execute',{version:1,
+      organizationId:record.organizationId,repositoryId:record.repositoryId,runId:record.runId,
+      traceId:record.runId,idempotencyKey:`cloud:${record.runId}`});}}}:{}),
     queued:async record=>{await runs.transition({organizationId:record.organizationId,repositoryId:record.repositoryId,runId:record.runId},'RECEIVED','QUEUED',record.attempt);},
   });
   console.log(JSON.stringify({event:'pull_request.review.handled',status:outcome.status,
     ...(outcome.status==='skipped'?{reason:outcome.reason}:{runId:outcome.runId})}));
+});
+
+if(cloudEnabled)await queue.work('review.cloud_execute',async payload=>{
+  const outcome=await executeCloudReview(payload,{
+    async run(organizationId,runId){
+      const rows=await db.pool.query<{organization_id:string;repository_id:string;id:string;state:string;attempt:number;snapshot:ReviewSnapshot}>(
+        'SELECT organization_id,repository_id,id,state,attempt,snapshot FROM review_runs WHERE organization_id=$1 AND id=$2',[organizationId,runId]);
+      const row=rows.rows[0];
+      if(!row)return null;
+      return {organizationId:row.organization_id,repositoryId:row.repository_id,runId:row.id,
+        state:row.state,attempt:row.attempt,snapshot:row.snapshot};
+    },
+    // Scoped to the organisation that owns the run, so one tenant's reference can never
+    // resolve another tenant's secret, and to the provider the profile names.
+    credential:async(organizationId,provider,reference)=>
+      new EncryptedSecretStore(db,cipher!,provider).resolve(organizationId,reference),
+    provider:(profile,secret)=>createProvider(profile.provider,secret,deployment),
+    // Read-only and single-repository: the clone needs nothing more, and the publish
+    // credential is minted separately when the review is ready to post.
+    async token(snapshot){
+      const repo=await db.pool.query<{github_repository_id:string}>(
+        'SELECT github_repository_id FROM repositories WHERE organization_id=$1 AND id=$2',
+        [snapshot.organizationId,snapshot.repositoryId]);
+      const githubRepositoryId=repo.rows[0]?.github_repository_id;
+      if(githubRepositoryId===undefined)throw Error('REPOSITORY_UNKNOWN');
+      return broker!.token(snapshot.installationId,Number(githubRepositoryId),'read');
+    },
+    execute:executeReview,
+    // The result is held only until publication completes or is abandoned (ADR-038), and
+    // the job carries identifiers alone.
+    schedulePublication:async(snapshot,result)=>{
+      await publications.put({runId:result.runId,organizationId:snapshot.organizationId,
+        repositoryId:snapshot.repositoryId,retentionMode:snapshot.retentionMode,payload:{snapshot,result}});
+      await queue.send('review.publish',{version:1,organizationId:snapshot.organizationId,
+        repositoryId:snapshot.repositoryId,runId:result.runId,headSha:snapshot.headSha,
+        traceId:result.runId,idempotencyKey:`publish:${result.runId}:${snapshot.headSha}`});
+    },
+    config:{enabled},
+  });
+  // A retry is signalled by throwing, so pg-boss reschedules rather than marking it done.
+  if(outcome.status==='retry')throw Error(outcome.errorClass);
+  console.log(JSON.stringify({event:'review.cloud_execute.handled',status:outcome.status,runId:payload.runId,
+    ...(outcome.status==='skipped'?{reason:outcome.reason}:{candidates:outcome.candidates,
+      inspectedFiles:outcome.inspectedFiles,changedNodes:outcome.changedNodes})}));
 });
 
 await queue.work('review.publish',async payload=>{
@@ -124,4 +192,5 @@ await queue.work('review.publish',async payload=>{
 let closing=false;
 const close=async()=>{if(closing)return;closing=true;await queue.stop();await db.close();};
 process.once('SIGTERM',()=>{void close();});process.once('SIGINT',()=>{void close();});
-console.log(JSON.stringify({event:'worker.started',queues:['github.event','pull_request.review','review.publish']}));
+console.log(JSON.stringify({event:'worker.started',
+  queues:['github.event','pull_request.review',...(cloudEnabled?['review.cloud_execute']:[]),'review.publish']}));

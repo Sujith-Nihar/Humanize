@@ -64,3 +64,35 @@ export function requireOrganization(claims:SessionClaims|null,organizationId:str
   if(!claims||!claims.organizationIds.includes(organizationId))throw Error('FORBIDDEN');
   return claims;
 }
+
+/**
+ * Builds a cipher from deployment secret management. Keys never live in the database
+ * (spec 26.3), so they arrive as environment values a deployment injects.
+ *
+ * `HUMANIZE_ENCRYPTION_KEYS` is `version:base64` pairs separated by commas, and
+ * `HUMANIZE_ENCRYPTION_ACTIVE_KEY` names the one to encrypt with. Several may be present at
+ * once, which is what makes rotation possible: a new key becomes active for writes while the
+ * old one stays available to decrypt what it wrote, and each stored secret records the
+ * version that encrypted it.
+ *
+ * Returns undefined when no keys are configured, so a deployment without them starts and
+ * reports which capability is unavailable rather than failing obscurely.
+ */
+export function cipherFromEnvironment(env:Record<string,string|undefined>=process.env):SecretCipher|undefined {
+  const raw=env.HUMANIZE_ENCRYPTION_KEYS?.trim();
+  if(!raw)return undefined;
+  const keys=new Map<string,Buffer>();
+  for(const entry of raw.split(',')){
+    const separator=entry.indexOf(':');
+    if(separator<1)throw Error('INVALID_ENCRYPTION_KEYS');
+    const version=entry.slice(0,separator).trim();
+    const key=Buffer.from(entry.slice(separator+1).trim(),'base64');
+    // A short key is rejected here rather than silently padded: a 16-byte value reaching
+    // aes-256-gcm would fail far from its cause, or worse, encrypt under a weaker secret.
+    if(!version||key.length!==32)throw Error('INVALID_ENCRYPTION_KEYS');
+    keys.set(version,key);
+  }
+  const active=env.HUMANIZE_ENCRYPTION_ACTIVE_KEY?.trim()??(keys.size===1?[...keys.keys()][0]:undefined);
+  if(!active)throw Error('INVALID_ENCRYPTION_KEYS');
+  return new SecretCipher(keys,active);
+}

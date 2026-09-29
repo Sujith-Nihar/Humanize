@@ -20,11 +20,13 @@ export interface ExecutionConfig {
   workspaceRoot?:string;
 }
 /**
- * What one execution needs from outside itself: a model, and a read-only repository token.
- * Which provider is behind `provider` is the caller's decision, because it is the caller that
- * knows whether this review is running on the customer's own hardware or in the cloud.
+ * What one execution needs from outside itself: the models, and a read-only repository token.
+ * Which providers are behind them is the caller's decision, because it is the caller that
+ * knows whether this review runs on the customer's own hardware or in the cloud. They are
+ * separate because administrator policy may name a different provider for each role; a
+ * private review passes the same local model twice.
  */
-export interface ExecutionPorts { provider:ModelProvider; token:string; }
+export interface ExecutionPorts { reviewer:ModelProvider; verifier:ModelProvider; token:string; }
 export interface ExecutionReport { result:ReviewResult; inspectedFiles:number; extractedNodes:number; changedNodes:number; }
 
 /** Lines added on the right-hand side of the diff; a review only judges what the PR changed. */
@@ -92,8 +94,8 @@ export async function executeReview(
     }).filter(node=>routeNode(node,{enabled:config.enabled}).eligible).slice(0,LIMITS.nodeBatch);
 
     const outcome=await reviewNodes(snapshot,changed,{
-      reviewer:ports.provider,reviewerModel:snapshot.reviewer.model,
-      verifier:ports.provider,verifierModel:snapshot.verifier.model,
+      reviewer:ports.reviewer,reviewerModel:snapshot.reviewer.model,
+      verifier:ports.verifier,verifierModel:snapshot.verifier.model,
       context:async node=>(await buildContext({node,index})).evidence,
       rules:node=>evaluateRules(node,config.rules??{}) as NodeSignal[],
     },{enabled:config.enabled,...(config.minimumSeverity?{minimumSeverity:config.minimumSeverity}:{}),...(signal?{signal}:{})});

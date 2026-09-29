@@ -23,6 +23,12 @@
       "path": "../../packages/scanner/tsconfig.build.json"
     },
     {
+      "path": "../../packages/security/tsconfig.build.json"
+    },
+    {
+      "path": "../../packages/execution/tsconfig.build.json"
+    },
+    {
       "path": "../../packages/extractors/tsconfig.build.json"
     },
     {

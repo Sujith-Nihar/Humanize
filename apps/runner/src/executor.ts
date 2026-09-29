@@ -25,7 +25,8 @@ export async function executeReview(
   if(snapshot.executionMode!=='runner')throw Error('NOT_A_RUNNER_JOB');
   if(snapshot.reviewer.provider!=='ollama'||snapshot.verifier.provider!=='ollama')throw Error('CLOUD_MODEL_IN_PRIVATE_JOB');
 
-  const report=await execute(snapshot,lease.runId,{provider:ports.provider,token:credential.token},config,signal);
+  // One local model fills both roles on a runner, which is what its capabilities advertise.
+  const report=await execute(snapshot,lease.runId,{reviewer:ports.provider,verifier:ports.provider,token:credential.token},config,signal);
   // The lease identity is added here rather than inside the review, because it is what proves
   // this upload answers the work that was handed out, and only a leased run has one.
   return {...report,result:{...report.result,leaseId:lease.leaseId,fence:lease.fence}};

@@ -15,6 +15,7 @@
     "@humanize/content-index": "workspace:*",
     "@humanize/db": "workspace:*",
     "@humanize/domain": "workspace:*",
+    "@humanize/execution": "workspace:*",
     "@humanize/extractors": "workspace:*",
     "@humanize/github": "workspace:*",
     "@humanize/providers": "workspace:*",
@@ -23,6 +24,7 @@
     "@humanize/review": "workspace:*",
     "@humanize/rules": "workspace:*",
     "@humanize/scanner": "workspace:*",
+    "@humanize/security": "workspace:*",
     "@humanize/shared": "workspace:*",
     "@humanize/suggestions": "workspace:*",
     "@humanize/telemetry": "workspace:*"
