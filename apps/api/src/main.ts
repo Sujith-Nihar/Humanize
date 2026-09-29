@@ -39,13 +39,14 @@ const app=createApi({
   ...(admin.options?{admin:admin.options}:{}),
   // An accepted result is held only until publication completes or is abandoned (ADR-038),
   // and the job carries identifiers alone. A runner never waits on GitHub.
-  publication:{schedule:async(result,scope)=>{
+  // Both writes go through the acceptance transaction, so they commit with it or not at all.
+  publication:{schedule:async(result,scope,client)=>{
     await publications.put({runId:scope.runId,organizationId:scope.snapshot.organizationId,
       repositoryId:scope.snapshot.repositoryId,retentionMode:scope.snapshot.retentionMode,
-      payload:{snapshot:scope.snapshot,result}});
+      payload:{snapshot:scope.snapshot,result}},undefined,client);
     await queue.send('review.publish',{version:1,organizationId:scope.snapshot.organizationId,
       repositoryId:scope.snapshot.repositoryId,runId:scope.runId,headSha:scope.snapshot.headSha,
-      traceId:scope.runId,idempotencyKey:`publish:${scope.runId}:${scope.snapshot.headSha}`});
+      traceId:scope.runId,idempotencyKey:`publish:${scope.runId}:${scope.snapshot.headSha}`},client);
   }},
   ...(extension?{extension}:{}),
 });

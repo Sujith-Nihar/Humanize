@@ -88,7 +88,8 @@ it('schedules publication once an accepted result is stored, and not for a dupli
   const store = {
     register: vi.fn(), heartbeat: vi.fn(), claim: vi.fn(), renew: vi.fn(), fail: vi.fn(),
     leaseScope: vi.fn(async () => ({ installationId: 7, githubRepositoryId: 99, owner: 'acme', name: 'site', headSha, runId: 'r', snapshot })),
-    accept: vi.fn(async () => ({ duplicate: false })),
+    // Like the store, it runs the scheduling callback inside acceptance unless it is a duplicate.
+    accept: vi.fn(async (_credential: string, _result: unknown, onAccepted?: (client: never) => Promise<void>) => { await onAccepted?.({} as never); return { duplicate: false }; }),
   };
   const app = createApi({
     webhookSecret: 'secret', sink: { ingest: vi.fn(async () => true) }, runners: store as never,
@@ -101,7 +102,7 @@ it('schedules publication once an accepted result is stored, and not for a dupli
     expect(accepted.statusCode).toBe(200);
     expect(scheduled).toEqual([envelope.runId]);
     // A re-sent result must not schedule a second publication of the same review.
-    store.accept = vi.fn(async () => ({ duplicate: true }));
+    store.accept = vi.fn(async () => ({ duplicate: true })) as typeof store.accept;
     await app.inject({ method: 'POST', url: `/runner/leases/${envelope.leaseId}/result`, headers: { authorization: `Bearer ${'c'.repeat(43)}` }, payload: envelope as never });
     expect(scheduled).toEqual([envelope.runId]);
   } finally { await app.close(); }

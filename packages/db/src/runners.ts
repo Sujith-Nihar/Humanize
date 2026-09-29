@@ -117,7 +117,14 @@ export class RunnerStore {
       return {organizationId:row.organization_id,repositoryId:row.repository_id,runId:row.run_id,installationId:Number(row.installation_id),githubRepositoryId:Number(row.github_repository_id),owner:row.owner,name:row.name,headSha:row.head_sha,snapshot:ReviewSnapshotSchema.parse(row.snapshot)};
     });
   }
-  async accept(credential:string,input:RunnerResult):Promise<{duplicate:boolean;snapshot:ReviewSnapshot}>{
+  /**
+   * Accepts a result for its lease. `onAccepted` runs inside the same transaction, after the lease
+   * is marked but before anything commits, so whatever it schedules commits with the acceptance or
+   * not at all. Scheduling afterwards, in a separate step, could fail once the acceptance had
+   * already committed: the runner's retry would then be a duplicate that schedules nothing, and
+   * the review was lost. A duplicate never calls it, because the first acceptance already did.
+   */
+  async accept(credential:string,input:RunnerResult,onAccepted?:(client:pg.PoolClient,snapshot:ReviewSnapshot)=>Promise<void>):Promise<{duplicate:boolean;snapshot:ReviewSnapshot}>{
     const result=RunnerResultSchema.parse(input);const digest=runnerResultDigest(result);
     return this.db.transaction(async tx=>{
       const runner=await this.authenticated(tx,credential);
@@ -129,7 +136,9 @@ export class RunnerStore {
       // reassigned, still be accepted here whenever the two machines disagree.
       if(row.state!=='LEASED'||!row.live)throw Error('LEASE_LOST');
       await tx.query("UPDATE runner_leases SET state='RESULT_RECEIVED',result_hash=$1 WHERE id=$2",[digest,result.leaseId]);
-      return {duplicate:false,snapshot:ReviewSnapshotSchema.parse(row.snapshot)};
+      const snapshot=ReviewSnapshotSchema.parse(row.snapshot);
+      if(onAccepted)await onAccepted(tx,snapshot);
+      return {duplicate:false,snapshot};
     });
   }
   async revoke(organizationId:string,runnerId:string,client?:Pick<pg.PoolClient,'query'>):Promise<void>{

@@ -1,6 +1,6 @@
 import { beforeAll,afterAll,expect,it,vi } from 'vitest';
 import { randomUUID,randomInt } from 'node:crypto';
-import { Database,migrate,RunnerStore,RunStore } from '@humanize/db';
+import { Database,migrate,PublicationStore,RunnerStore,RunStore } from '@humanize/db';
 import { snapshotDigest,DEFAULT_REVIEW_SCOPE } from '@humanize/domain';
 import type { ContentNode,ReviewSnapshot,RunnerResult } from '@humanize/domain';
 import { createApi } from './src/app.js';
@@ -103,4 +103,41 @@ it('refuses an oversized upload before parsing it',async()=>{
   expect((await upload(lease.leaseId,huge)).statusCode).toBe(413);
   // The lease is untouched, so the runner can still submit a result within the budget.
   expect((await upload(lease.leaseId,envelope(lease))).statusCode).toBe(200);
+});
+
+it('commits scheduling with acceptance, so a failed schedule leaves the result acceptable again',async()=>{
+  // The defect this guards against: acceptance committed first and scheduling ran afterwards.
+  // A scheduling failure then left the lease accepted with nothing scheduled, the runner's retry
+  // was a duplicate that scheduled nothing, and the review was never published.
+  const publications=new PublicationStore(db);
+  let failNext=true,calls=0;
+  const scheduling=createApi({webhookSecret:'secret',sink:{ingest:vi.fn(async()=>true)},runners:store,
+    tokens:{scopedToken:vi.fn(async()=>({token:'ghs_fixture',expiresAt:'2026-09-17T21:00:00.000Z'}))},
+    publication:{schedule:async(result,scope,client)=>{
+      calls++;
+      // The payload is written first, exactly as production does, then the queue step fails.
+      await publications.put({runId:scope.runId,organizationId:scope.snapshot.organizationId,repositoryId:scope.snapshot.repositoryId,
+        retentionMode:scope.snapshot.retentionMode,payload:{snapshot:scope.snapshot,result}},undefined,client);
+      if(failNext){failNext=false;throw Error('queue unavailable');}
+    }}});
+  try{
+    const lease=await claimed();
+    const send=()=>scheduling.inject({method:'POST',url:`/runner/leases/${lease.leaseId}/result`,headers:{authorization:`Bearer ${credential}`},payload:envelope(lease) as never});
+    const state=async()=>(await db.pool.query<{state:string}>('SELECT state FROM runner_leases WHERE id=$1',[lease.leaseId])).rows[0]!.state;
+    const payloads=async()=>(await db.pool.query('SELECT 1 FROM publication_payloads WHERE run_id=$1',[lease.runId])).rowCount;
+
+    expect((await send()).statusCode).toBe(503);
+    // Nothing committed: the lease is still live and the payload written before the failure is gone.
+    expect(await state()).toBe('LEASED');
+    expect(await payloads()).toBe(0);
+
+    // The retry is a fresh acceptance, not a duplicate, so it schedules.
+    const retried=await send();
+    expect(retried.json()).toEqual({accepted:true,duplicate:false});
+    expect(await state()).toBe('RESULT_RECEIVED');
+    expect(await payloads()).toBe(1);
+    // A later re-send is a duplicate and schedules nothing more.
+    expect((await send()).json()).toEqual({accepted:true,duplicate:true});
+    expect(calls).toBe(2);
+  }finally{await scheduling.close();}
 });

@@ -115,13 +115,15 @@ if(cloudEnabled)await queue.work('review.cloud_execute',async payload=>{
     execute:executeReview,
     // The result is held only until publication completes or is abandoned (ADR-038), and
     // the job carries identifiers alone.
-    schedulePublication:async(snapshot,result)=>{
+    // One transaction: a payload with no publish job would sit until the sweep removed it, and
+    // the queue would retry the entire review, model calls included, to recover it.
+    schedulePublication:(snapshot,result)=>db.transaction(async client=>{
       await publications.put({runId:result.runId,organizationId:snapshot.organizationId,
-        repositoryId:snapshot.repositoryId,retentionMode:snapshot.retentionMode,payload:{snapshot,result}});
+        repositoryId:snapshot.repositoryId,retentionMode:snapshot.retentionMode,payload:{snapshot,result}},undefined,client);
       await queue.send('review.publish',{version:1,organizationId:snapshot.organizationId,
         repositoryId:snapshot.repositoryId,runId:result.runId,headSha:snapshot.headSha,
-        traceId:result.runId,idempotencyKey:`publish:${result.runId}:${snapshot.headSha}`});
-    },
+        traceId:result.runId,idempotencyKey:`publish:${result.runId}:${snapshot.headSha}`},client);
+    }),
     // What to review comes from the snapshot alone; only where to work is configured here.
     config:{},
   });

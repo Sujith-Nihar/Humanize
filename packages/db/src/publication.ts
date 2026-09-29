@@ -16,7 +16,18 @@ export const PUBLICATION_TTL_MS=60*60*1000;
 export class PublicationStore {
   constructor(private readonly db:Database){}
 
-  async put(record:PublicationRecord,ttlMs=PUBLICATION_TTL_MS):Promise<void> {
+  /**
+   * Holds a payload for publication. Given `client`, the write joins that caller's transaction,
+   * which is how acceptance and scheduling commit together or not at all.
+   */
+  async put(record:PublicationRecord,ttlMs=PUBLICATION_TTL_MS,client?:{query(text:string,values:unknown[]):Promise<unknown>}):Promise<void> {
+    if(client){
+      await client.query(`INSERT INTO publication_payloads(organization_id,repository_id,run_id,retention_mode,payload,expires_at)
+        VALUES($1,$2,$3,$4,$5,now()+($6::bigint*interval '1 millisecond'))
+        ON CONFLICT(run_id) DO UPDATE SET payload=EXCLUDED.payload,expires_at=EXCLUDED.expires_at`,
+        [record.organizationId,record.repositoryId,record.runId,record.retentionMode,JSON.stringify(record.payload),ttlMs]);
+      return;
+    }
     const values={organizationId:record.organizationId,repositoryId:record.repositoryId,runId:record.runId,
       retentionMode:record.retentionMode,payload:record.payload,expiresAt:new Date(Date.now()+ttlMs)};
     await this.db.orm.insert(publicationPayloads).values(values)

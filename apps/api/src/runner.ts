@@ -10,7 +10,8 @@ export interface RunnerService {
   claim(credential:string):Promise<{leaseId:string;fence:number;runId:string;expiresAt:string;expiresInMs:number;snapshot:unknown}|null>;
   renew(credential:string,leaseId:string,fence:number):Promise<{expiresAt:string;expiresInMs:number}>;
   fail(credential:string,leaseId:string,fence:number,retryable:boolean):Promise<void>;
-  accept(credential:string,result:RunnerResult):Promise<{duplicate:boolean}>;
+  /** `onAccepted` runs inside the acceptance transaction, so what it schedules commits with it. */
+  accept(credential:string,result:RunnerResult,onAccepted?:(client:TransactionClient)=>Promise<void>):Promise<{duplicate:boolean}>;
 }
 /** Mints the single-repository, read-only GitHub credential a leased job may use. */
 export interface TokenIssuer {
@@ -53,8 +54,14 @@ async function guard(reply:FastifyReply,run:()=>Promise<FastifyReply>):Promise<F
   }
 }
 
-/** Schedules publication of an accepted result; the control plane alone talks to GitHub. */
-export interface PublicationScheduler { schedule(result:RunnerResult,scope:LeaseScope):Promise<void>; }
+/** A database connection inside an open transaction, as the store hands it to a callback. */
+export interface TransactionClient { query(text:string,values:unknown[]):Promise<{rows:unknown[]}>; }
+/**
+ * Schedules publication of an accepted result; the control plane alone talks to GitHub. It writes
+ * through `client`, the acceptance's own transaction, so an accepted result is never left
+ * unscheduled.
+ */
+export interface PublicationScheduler { schedule(result:RunnerResult,scope:LeaseScope,client:TransactionClient):Promise<void>; }
 
 export function registerRunnerRoutes(app:FastifyInstance,service:RunnerService,issuer:TokenIssuer,publication?:PublicationScheduler):void {
   app.post('/runner/registrations',{bodyLimit:BODY_LIMIT},async(request,reply)=>{
@@ -131,10 +138,12 @@ export function registerRunnerRoutes(app:FastifyInstance,service:RunnerService,i
       const violations=validateRunnerResult(parsed.data,scope.snapshot);
       // Violation codes only: the payload is untrusted and must not be echoed back.
       if(violations.length)return reply.code(422).send({error:'INVALID_RESULT',violations});
-      const accepted=await service.accept(credential,parsed.data);
       // Scheduled, never published inline: a runner must not wait on GitHub, and a failed
       // publish has to be retried by the durable queue rather than lost with the response.
-      if(!accepted.duplicate&&publication)await publication.schedule(parsed.data,scope);
+      // Scheduling commits with the acceptance, so a failure leaves neither and the runner's
+      // retry is accepted afresh rather than mistaken for a duplicate.
+      const result=parsed.data;
+      const accepted=await service.accept(credential,result,publication?client=>publication.schedule(result,scope,client):undefined);
       return reply.code(200).send({accepted:true,duplicate:accepted.duplicate});
     });
   });
