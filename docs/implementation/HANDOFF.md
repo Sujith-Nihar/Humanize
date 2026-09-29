@@ -6,7 +6,14 @@ problem: `node_modules` was absent, so `pnpm install --frozen-lockfile` is requi
 `humanize-postgres-1` container was stopped, so `docker compose up -d` is required before
 `pnpm test:integration`.
 
-**Resuming? Start with [plan-production-review.md](plan-production-review.md).** Stage 1 (batching
+**Resuming? Read [audit-2026-09-29.md](audit-2026-09-29.md) first.** A full-repository audit found
+six blockers that sit between components each tested alone. The most serious (B1, reproduced):
+any finding that cites repository context invalidates the whole review, so nothing is posted.
+Configuration and policy review settings never reach the review (B2), and blocking and
+deterministic status is lost at publication (B3). Fix those before new feature work; the audit
+ends with a suggested repair order.
+
+**The production review plan is in [plan-production-review.md](plan-production-review.md).** Stage 1 (batching
 model calls) is implemented, and its live acceptance was **measured on 2026-09-28 and not met**.
 The measurement moved the bottleneck: it is output tokens, not round trips. The next action is a
 decision on cutting output tokens (below). Stages 2 to 7 have not begun.
