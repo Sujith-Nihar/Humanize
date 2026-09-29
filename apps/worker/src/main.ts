@@ -171,12 +171,12 @@ await queue.work('review.publish',async payload=>{
       const check=buildCheck([...plan.inline,...plan.summary]);
       try{
         const posted=await new ReviewPublisher(transport).publish(
-          {owner:snapshot.owner,repo:snapshot.repository,pullNumber:snapshot.pullNumber,headSha:snapshot.headSha},
+          {owner:snapshot.owner,repo:snapshot.repository,pullNumber:snapshot.pullNumber,headSha:snapshot.headSha,runId:result.runId},
           review,check);
         console.log(JSON.stringify({event:'review.published',runId:payload.runId,
           inline:review.comments.length,summary:plan.summary.length,conclusion:check.conclusion,
           suggestions:suggested.attached,suggestionsRefused:suggested.refused,
-          reviewId:posted.reviewId,checkRunId:posted.checkRunId,updatedExisting:posted.updatedExisting}));
+          reviewId:posted.reviewId,checkRunId:posted.checkRunId,updatedExisting:posted.updatedExisting,resumed:posted.resumed}));
         return {reviewId:posted.reviewId};
       }catch(error){
         // A superseded head is an expected end, not a failure: a newer review replaces this one.

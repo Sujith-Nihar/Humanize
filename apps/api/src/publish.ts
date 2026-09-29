@@ -27,7 +27,7 @@ export async function publishResult(request:PublishRequest,ports:PublishPorts):P
   const check=buildCheck([...plan.inline,...plan.summary]);
   try{
     return await new ReviewPublisher(await ports.transport(request.snapshot)).publish(
-      {owner:request.snapshot.owner,repo:request.snapshot.repository,pullNumber:request.snapshot.pullNumber,headSha:request.snapshot.headSha},
+      {owner:request.snapshot.owner,repo:request.snapshot.repository,pullNumber:request.snapshot.pullNumber,headSha:request.snapshot.headSha,runId:request.result.runId},
       review,check,
     );
   }catch(error){

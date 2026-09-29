@@ -27,6 +27,7 @@ const ports=(head=headSha,map:DiffMap=diff)=>{
   const calls:{route:string;parameters:Record<string,unknown>}[]=[];
   const routes:Record<string,unknown>={'GET /repos/{owner}/{repo}/pulls/{pull_number}':{head:{sha:head}},
     'POST /repos/{owner}/{repo}/check-runs':{id:1},'GET /repos/{owner}/{repo}/issues/{issue_number}/comments':[],
+    'GET /repos/{owner}/{repo}/commits/{ref}/check-runs':{check_runs:[]},'GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews':[],
     'POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews':{id:2}};
   return {calls,transport:async()=>({request:vi.fn(async(route:string,parameters:Record<string,unknown>)=>{calls.push({route,parameters});return {data:(routes[route]??{}) as never};})}),diff:async()=>map};
 };
@@ -35,7 +36,7 @@ it('publishes a verified finding as an inline comment on the changed line', asyn
   const p=ports();
   const outcome=await publishResult({snapshot,rules:noRules,result:result()},p);
   expect(outcome).toMatchObject({reviewId:2,checkRunId:1});
-  const review=p.calls.find(call=>call.route.endsWith('/reviews'))!.parameters as {comments:{path:string;line:number}[];body:string};
+  const review=p.calls.find(call=>call.route==='POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews')!.parameters as {comments:{path:string;line:number}[];body:string};
   expect(review.comments).toEqual([expect.objectContaining({path:'app/page.tsx',line:12})]);
   expect(review.body).toContain(REVIEW_MARKER);
 });
@@ -47,9 +48,9 @@ it('discards a finding whose quotation is not in the content the runner supplied
   expect(findingsFromResult(fabricated,snapshot,noRules)).toEqual([]);
   const p=ports();
   await publishResult({snapshot,rules:noRules,result:fabricated},p);
-  const review=p.calls.find(call=>call.route.endsWith('/reviews'));
+  const review=p.calls.find(call=>call.route==='POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews');
   expect(review).toBeUndefined();
-  expect(p.calls.find(call=>call.route.endsWith('/check-runs'))!.parameters).toMatchObject({conclusion:'success'});
+  expect(p.calls.find(call=>call.route==='POST /repos/{owner}/{repo}/check-runs')!.parameters).toMatchObject({conclusion:'success'});
 });
 
 it('discards content that does not belong to the reviewed commit', () => {
@@ -76,7 +77,7 @@ it('holds inline comments to the configured budget', async () => {
     addedLines:[12],deletedLines:[],hunks:[{oldStart:1,oldCount:20,newStart:1,newCount:20}]}))};
   const p=ports(headSha,wide);
   await publishResult({snapshot,rules:noRules,result:many,maxSubjectiveInline:2},p);
-  const review=p.calls.find(call=>call.route.endsWith('/reviews'))!.parameters as {body:string;comments:unknown[]};
+  const review=p.calls.find(call=>call.route==='POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews')!.parameters as {body:string;comments:unknown[]};
   // Only the budgeted findings are inline; the rest are named in the summary.
   expect(review.comments).toHaveLength(2);
   expect(review.body).toContain('Further observations not posted inline');

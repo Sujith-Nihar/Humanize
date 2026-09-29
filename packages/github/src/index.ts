@@ -30,6 +30,6 @@ export function representableRange(diff:FileDiff,start:number,end:number):boolea
 
 export { agentPrompt,buildReview,buildCheck,renderComment,renderSummary,commentableLine,REVIEW_MARKER,commentMarker } from './publisher.js';
 export type { CheckConclusion,CheckPayload,PublishableFinding,ReviewComment,ReviewPayload } from './publisher.js';
-export { ReviewPublisher,StaleHeadError } from './transport.js';
+export { CHECK_NAME,ReviewPublisher,StaleHeadError,runMarker } from './transport.js';
 export { fetchDiffMap } from './diff-map.js';
 export type { GitHubTransport,PublishOutcome,PullRequestTarget } from './transport.js';

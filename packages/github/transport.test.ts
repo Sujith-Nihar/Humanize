@@ -1,8 +1,9 @@
 import { expect,it,vi } from 'vitest';
-import { REVIEW_MARKER,ReviewPublisher,StaleHeadError } from './src/index.js';
+import { REVIEW_MARKER,ReviewPublisher,StaleHeadError,runMarker } from './src/index.js';
 import type { GitHubTransport } from './src/index.js';
 
-const target={owner:'acme',repo:'site',pullNumber:7,headSha:'b'.repeat(40)};
+const runId='22222222-2222-4222-8222-222222222222';
+const target={owner:'acme',repo:'site',pullNumber:7,headSha:'b'.repeat(40),runId};
 const review={event:'COMMENT' as const,body:`${REVIEW_MARKER}\nSummary`,comments:[{path:'app/page.tsx',line:12,side:'RIGHT' as const,body:'Observation'}]};
 const check={conclusion:'neutral' as const,title:'1 content observation',summary:'Advisory'};
 const fake=(routes:Record<string,unknown>)=>{
@@ -16,6 +17,8 @@ const fake=(routes:Record<string,unknown>)=>{
 const defaults={'GET /repos/{owner}/{repo}/pulls/{pull_number}':{head:{sha:'b'.repeat(40)}},
   'POST /repos/{owner}/{repo}/check-runs':{id:555},
   'GET /repos/{owner}/{repo}/issues/{issue_number}/comments':[],
+  'GET /repos/{owner}/{repo}/commits/{ref}/check-runs':{check_runs:[]},
+  'GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews':[],
   'POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews':{id:999}};
 
 it('publishes a grouped review and a check run for the reviewed head', async () => {
@@ -65,13 +68,14 @@ it('removes a stale no-findings comment when a review supersedes it',async()=>{
   const calls:{route:string;parameters:Record<string,unknown>}[]=[];
   const transport={request:async(route:string,parameters:Record<string,unknown>)=>{
     calls.push({route,parameters});
+    if(route==='GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews')return {data:[]};
     if(route.startsWith('GET /repos/{owner}/{repo}/pulls/{pull_number}'))return {data:{head:{sha:'c'.repeat(40)}}};
     if(route.startsWith('GET /repos/{owner}/{repo}/issues/{issue_number}/comments'))
       return {data:[{id:4242,body:`${REVIEW_MARKER}\nNothing to flag.`}]};
     return {data:{id:7}};
   }};
   const outcome=await new ReviewPublisher(transport as never).publish(
-    {owner:'acme',repo:'site',pullNumber:1,headSha:'c'.repeat(40)},
+    {owner:'acme',repo:'site',pullNumber:1,headSha:'c'.repeat(40),runId},
     {event:'COMMENT',body:'summary',comments:[{path:'a.tsx',line:3,side:'RIGHT',body:'finding'}]},
     {conclusion:'neutral',title:'1 observation',summary:'advisory'});
   expect(outcome.supersededCommentId).toBe(4242);
@@ -83,15 +87,50 @@ it('leaves comments that are not its own alone',async()=>{
   const calls:string[]=[];
   const transport={request:async(route:string)=>{
     calls.push(route);
+    if(route==='GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews')return {data:[]};
     if(route.startsWith('GET /repos/{owner}/{repo}/pulls/{pull_number}'))return {data:{head:{sha:'c'.repeat(40)}}};
     if(route.startsWith('GET /repos/{owner}/{repo}/issues/{issue_number}/comments'))
       return {data:[{id:99,body:'a human wrote this'}]};
     return {data:{id:7}};
   }};
   const outcome=await new ReviewPublisher(transport as never).publish(
-    {owner:'acme',repo:'site',pullNumber:1,headSha:'c'.repeat(40)},
+    {owner:'acme',repo:'site',pullNumber:1,headSha:'c'.repeat(40),runId},
     {event:'COMMENT',body:'summary',comments:[{path:'a.tsx',line:3,side:'RIGHT',body:'finding'}]},
     {conclusion:'neutral',title:'1 observation',summary:'advisory'});
   expect(outcome.supersededCommentId).toBeUndefined();
   expect(calls.some(r=>r.startsWith('DELETE'))).toBe(false);
+});
+
+it('finishes a partly published run on retry instead of posting it twice', async () => {
+  // A previous attempt created the check run and posted the review, then failed before the
+  // payload was discarded, so the queue retries. The retry must complete, not repeat.
+  const {transport,calls}=fake({...defaults,
+    'GET /repos/{owner}/{repo}/commits/{ref}/check-runs':{check_runs:[{id:321,external_id:'another-run'},{id:555,external_id:runId}]},
+    'PATCH /repos/{owner}/{repo}/check-runs/{check_run_id}':{id:555},
+    'GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews':[{id:1,body:'someone else'},{id:999,body:`${REVIEW_MARKER}\nSummary\n${runMarker(runId)}`}]});
+  const outcome=await new ReviewPublisher(transport).publish(target,review,check);
+  expect(outcome).toMatchObject({reviewId:999,checkRunId:555,resumed:true});
+  const routes=calls.map(call=>call.route);
+  expect(routes).not.toContain('POST /repos/{owner}/{repo}/check-runs');
+  expect(routes).not.toContain('POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews');
+  // The existing check run is brought up to date with this attempt's conclusion.
+  expect(calls.find(call=>call.route==='PATCH /repos/{owner}/{repo}/check-runs/{check_run_id}')!.parameters).toMatchObject({check_run_id:555,conclusion:'neutral'});
+});
+
+it('tags a first publication so that a retry can recognise it', async () => {
+  const {transport,calls}=fake(defaults);
+  const outcome=await new ReviewPublisher(transport).publish(target,review,check);
+  expect(outcome.resumed).toBe(false);
+  expect(calls.find(call=>call.route==='POST /repos/{owner}/{repo}/check-runs')!.parameters).toMatchObject({external_id:runId});
+  expect(String(calls.find(call=>call.route==='POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews')!.parameters.body)).toContain(runMarker(runId));
+});
+
+it('treats another run\'s check and review as someone else\'s work', async () => {
+  // A new head is a new run: its publication must not be mistaken for a retry of an older one.
+  const {transport,calls}=fake({...defaults,
+    'GET /repos/{owner}/{repo}/commits/{ref}/check-runs':{check_runs:[{id:321,external_id:'33333333-3333-4333-8333-333333333333'}]},
+    'GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews':[{id:998,body:runMarker('33333333-3333-4333-8333-333333333333')}]});
+  const outcome=await new ReviewPublisher(transport).publish(target,review,check);
+  expect(outcome).toMatchObject({reviewId:999,checkRunId:555,resumed:false});
+  expect(calls.map(call=>call.route)).toContain('POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews');
 });
