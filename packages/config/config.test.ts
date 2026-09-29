@@ -4,7 +4,7 @@ import type { OrganizationPolicy } from './src/index.js';
 
 const policy:OrganizationPolicy={
   retentionMode:'ephemeral',executionMode:'runner',
-  reviewer:{provider:'ollama',model:'local-reviewer'},verifier:{provider:'ollama',model:'local-verifier'},
+  reviewer:{provider:'ollama',model:'local-reviewer', credentialRef: null },verifier:{provider:'ollama',model:'local-verifier', credentialRef: null },
   allowDrafts:false,maxSubjectiveInline:5,
   permittedCategories:['ai_like_generic','clarity','terminology'],requiredBlockingRules:[{type:'forbidden_phrase',phrase:'100% secure'}],
 };
@@ -60,8 +60,8 @@ it('takes every administrator-only value from policy whatever the repository say
   const effective=resolve('version: 1\n');
   expect(effective.retentionMode).toBe('ephemeral');
   expect(effective.executionMode).toBe('runner');
-  expect(effective.reviewer).toEqual({provider:'ollama',model:'local-reviewer'});
-  expect(effective.verifier).toEqual({provider:'ollama',model:'local-verifier'});
+  expect(effective.reviewer).toEqual({provider:'ollama',model:'local-reviewer', credentialRef: null });
+  expect(effective.verifier).toEqual({provider:'ollama',model:'local-verifier', credentialRef: null });
 });
 
 it('lets a repository narrow review but never widen it', () => {

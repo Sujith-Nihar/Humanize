@@ -1,4 +1,4 @@
-import { Category,LIMITS,RetentionMode,Severity,ProviderId,z } from '@humanize/domain';
+import { Category,Id,LIMITS,RetentionMode,Severity,ProviderId,z } from '@humanize/domain';
 
 /** Glob patterns are matched, never executed; they may not escape the repository root. */
 const Glob=z.string().min(1).max(500).refine(v=>!v.startsWith('/')&&!v.includes('..')&&!v.includes('\0'),'Unsafe pattern');
@@ -34,8 +34,11 @@ export type RepositoryConfig=z.infer<typeof RepositoryConfigSchema>;
 export const OrganizationPolicySchema=z.object({
   retentionMode:RetentionMode,
   executionMode:z.enum(['cloud','runner']),
-  reviewer:z.object({provider:ProviderId,model:z.string().min(1).max(200)}).strict(),
-  verifier:z.object({provider:ProviderId,model:z.string().min(1).max(200)}).strict(),
+  // credentialRef names a stored provider credential by id; the secret itself never appears
+  // here, and a local provider needs none. Which credential to use is an administrator choice,
+  // so it lives in policy and can never be set from repository content (ADR-027).
+  reviewer:z.object({provider:ProviderId,model:z.string().min(1).max(200),credentialRef:Id.nullable().default(null)}).strict(),
+  verifier:z.object({provider:ProviderId,model:z.string().min(1).max(200),credentialRef:Id.nullable().default(null)}).strict(),
   allowDrafts:z.boolean().default(false),
   maxSubjectiveInline:z.number().int().min(0).max(50).default(LIMITS.subjectiveInline),
   // A category absent from this list cannot be switched on by a repository.

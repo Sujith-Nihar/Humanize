@@ -72,7 +72,7 @@ it('creates a review run from configuration read at the base commit, and enqueue
   const enqueued: JobPayload[] = [];
   const policy = async () => ({
     retentionMode: 'ephemeral' as const, executionMode: 'runner' as const,
-    reviewer: { provider: 'ollama' as const, model: 'local' }, verifier: { provider: 'ollama' as const, model: 'local' },
+    reviewer: { provider: 'ollama' as const, model: 'local' , credentialRef: null }, verifier: { provider: 'ollama' as const, model: 'local' , credentialRef: null },
     allowDrafts: false, maxSubjectiveInline: 5,
     permittedCategories: ['ai_like_generic' as const, 'clarity' as const], requiredBlockingRules: [],
   });
@@ -122,7 +122,7 @@ it('reads administrator policy from storage, and refuses to guess when none is s
 
   await administration.setPolicy(organizationId, {
     retentionMode: 'indexed', executionMode: 'cloud',
-    reviewer: { provider: 'openai', model: 'gpt-review' }, verifier: { provider: 'openai', model: 'gpt-verify' },
+    reviewer: { provider: 'openai', model: 'gpt-review' , credentialRef: null }, verifier: { provider: 'openai', model: 'gpt-verify' , credentialRef: null },
     allowDrafts: false, maxSubjectiveInline: 3, permittedCategories: ['clarity'], requiredBlockingRules: [],
   });
   const scheduled = await handleGitHubEvent({ ...opened, occurredAt: '2026-09-18T16:05:00.000Z' }, context);

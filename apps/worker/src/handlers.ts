@@ -106,8 +106,11 @@ export async function handleGitHubEvent(raw:GitHubEvent,context:EventContext):Pr
     baseSha:event.pull.baseSha,headSha:updated.head_sha,
     configSha:file?.sha??'0'.repeat(40),configHash:effective.digest,
     executionMode:effective.executionMode,retentionMode:effective.retentionMode,
-    reviewer:{...effective.reviewer,credentialRef:null,maxInputTokens:12000,maxOutputTokens:4000,evaluatedLanguages:['en']},
-    verifier:{...effective.verifier,credentialRef:null,maxInputTokens:12000,maxOutputTokens:4000,evaluatedLanguages:['en']},
+    // The credential reference comes from administrator policy. A cloud review with no
+    // credential configured must not silently fall through to a local model, so the snapshot
+    // carries whatever policy chose and dispatch refuses a cloud run that names nothing.
+    reviewer:{...effective.reviewer,maxInputTokens:12000,maxOutputTokens:4000,evaluatedLanguages:['en']},
+    verifier:{...effective.verifier,maxInputTokens:12000,maxOutputTokens:4000,evaluatedLanguages:['en']},
     language:'en',allowUnevaluatedLanguage:false,
   };
   // Run creation is keyed by head and configuration, so a redelivery reuses the same run.
