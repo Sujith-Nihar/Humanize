@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { ProviderId, z } from '@humanize/domain';
+import { OrganizationPolicySchema } from '@humanize/config';
 import { SessionSigner, constantEqual, requireOrganization } from '@humanize/security';
 import type { SessionClaims } from '@humanize/security';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
@@ -9,18 +10,26 @@ export interface IdentityProvider {
   authorizeUrl(state: string): string;
   exchange(code: string): Promise<{ userId: string; organizationIds: string[] } | null>;
 }
-/** Credential storage. A saved secret is never read back out through this port. */
+/**
+ * Credential storage. A saved secret is never read back out through this port. Saving and
+ * revoking are organization-wide writes, so the binding authorises `actor` against ADR-028
+ * inside the write and throws FORBIDDEN or NO_ENABLED_REPOSITORY when it may not.
+ */
 export interface CredentialAdmin {
-  save(organizationId: string, provider: string, secret: string): Promise<{ id: string }>;
+  save(organizationId: string, provider: string, secret: string, actor: string): Promise<{ id: string }>;
   list(organizationId: string): Promise<{ id: string; provider: string; createdAt: string; revokedAt: string | null }[]>;
-  revoke(organizationId: string, id: string): Promise<void>;
+  revoke(organizationId: string, id: string, actor: string): Promise<void>;
 }
-/** Repository and policy administration. The admin check runs inside the write (S16-T02). */
+/**
+ * Repository and policy administration. The admin check runs inside the write (S16-T02):
+ * enablement asks which named repositories `actor` administers, and a policy write requires
+ * `actor` to administer every enabled repository (ADR-028).
+ */
 export interface RepositoryAdmin {
   repositories(organizationId: string): Promise<{ id: string; owner: string; name: string; enabled: boolean }[]>;
-  setEnabled(organizationId: string, repositoryIds: readonly string[], enabled: boolean): Promise<string[]>;
+  setEnabled(organizationId: string, repositoryIds: readonly string[], enabled: boolean, actor: string): Promise<string[]>;
   policy(organizationId: string): Promise<unknown | null>;
-  setPolicy(organizationId: string, policy: unknown): Promise<void>;
+  setPolicy(organizationId: string, policy: unknown, actor: string): Promise<void>;
 }
 /**
  * Runner administration. Creating an enrollment mints a credential, so the store performs the
@@ -29,9 +38,9 @@ export interface RepositoryAdmin {
 export interface RunnerAdmin {
   createEnrollment(organizationId:string,repositoryIds:string[],createdBy:string):Promise<{token:string;id:string;expiresAt:string}>;
   enrollments(organizationId:string):Promise<{id:string;repositoryIds:string[];createdBy:string|null;createdAt:string;expiresAt:string;state:string}[]>;
-  revokeEnrollment(organizationId:string,id:string):Promise<boolean>;
+  revokeEnrollment(organizationId:string,id:string,actor:string):Promise<boolean>;
   runners(organizationId:string):Promise<{id:string;online:boolean;revoked:boolean}[]>;
-  revokeRunner(organizationId:string,runnerId:string):Promise<void>;
+  revokeRunner(organizationId:string,runnerId:string,actor:string):Promise<void>;
 }
 export interface AdminOptions {
   sessions: SessionSigner; identity: IdentityProvider; credentials: CredentialAdmin;
@@ -44,6 +53,19 @@ const STATE_COOKIE = 'humanize_oauth_state';
 const CreateEnrollment = z.object({ organizationId: z.string().min(1).max(200), repositoryIds: z.array(z.string().uuid()).min(1).max(100) }).strict();
 const SetEnabled = z.object({ organizationId: z.string().min(1).max(200), repositoryIds: z.array(z.string().uuid()).min(1).max(500), enabled: z.boolean() }).strict();
 const SaveCredential = z.object({ organizationId: z.string().min(1).max(200), provider: ProviderId, secret: z.string().min(8).max(65536) }).strict();
+
+/**
+ * Maps an authority refusal from a store to a response. Anything else is a fault and is
+ * rethrown, so the shared error handler answers it without echoing its text.
+ */
+function authorityRefusal(reply: FastifyReply, error: unknown): FastifyReply {
+  const message = error instanceof Error ? error.message : '';
+  if (message === 'FORBIDDEN') return reply.code(403).send({ error: 'NOT_AN_ADMINISTRATOR' });
+  // Organization-wide authority is derived from enabled repositories, so with none enabled
+  // there is nobody who may govern the organization yet: enabling one comes first.
+  if (message === 'NO_ENABLED_REPOSITORY') return reply.code(409).send({ error: 'NO_ENABLED_REPOSITORY' });
+  throw error;
+}
 
 function cookies(request: FastifyRequest): Record<string, string> {
   const header = request.headers.cookie;
@@ -96,11 +118,14 @@ export function registerAdminRoutes(app: FastifyInstance, options: AdminOptions)
     const claims = sessionOf(request, options.sessions);
     const parsed = SaveCredential.safeParse(request.body ?? {});
     if (!parsed.success) return reply.code(400).send({ error: 'INVALID_REQUEST' });
-    try { requireOrganization(claims, parsed.data.organizationId); }
+    let session: SessionClaims;
+    try { session = requireOrganization(claims, parsed.data.organizationId); }
     catch { return reply.code(claims ? 403 : 401).send({ error: claims ? 'FORBIDDEN' : 'NOT_SIGNED_IN' }); }
-    const saved = await options.credentials.save(parsed.data.organizationId, parsed.data.provider, parsed.data.secret);
-    // One-way ingress: the response confirms the save and never echoes the secret (ADR-035).
-    return reply.code(201).send({ id: saved.id, provider: parsed.data.provider });
+    try {
+      const saved = await options.credentials.save(parsed.data.organizationId, parsed.data.provider, parsed.data.secret, session.userId);
+      // One-way ingress: the response confirms the save and never echoes the secret (ADR-035).
+      return reply.code(201).send({ id: saved.id, provider: parsed.data.provider });
+    } catch (error) { return authorityRefusal(reply, error); }
   });
 
   app.get('/api/credentials', async (request, reply) => {
@@ -116,10 +141,13 @@ export function registerAdminRoutes(app: FastifyInstance, options: AdminOptions)
     const claims = sessionOf(request, options.sessions);
     const organizationId = (request.query as { organizationId?: string }).organizationId ?? '';
     const { id } = request.params as { id: string };
-    try { requireOrganization(claims, organizationId); }
+    let session: SessionClaims;
+    try { session = requireOrganization(claims, organizationId); }
     catch { return reply.code(claims ? 403 : 401).send({ error: claims ? 'FORBIDDEN' : 'NOT_SIGNED_IN' }); }
-    await options.credentials.revoke(organizationId, id);
-    return reply.code(204).send();
+    try {
+      await options.credentials.revoke(organizationId, id, session.userId);
+      return reply.code(204).send();
+    } catch (error) { return authorityRefusal(reply, error); }
   });
 
   if (options.repositories) {
@@ -145,7 +173,8 @@ export function registerAdminRoutes(app: FastifyInstance, options: AdminOptions)
       if (refused) return reply.code(refused.code).send({ error: refused.error });
       // The store re-checks administrator rights inside the write, so session membership
       // alone never decides which repositories are switched on.
-      const changed = await admin.setEnabled(parsed.data.organizationId, parsed.data.repositoryIds, parsed.data.enabled);
+      const actor = sessionOf(request, options.sessions)!.userId;
+      const changed = await admin.setEnabled(parsed.data.organizationId, parsed.data.repositoryIds, parsed.data.enabled, actor);
       return reply.code(200).send({ changed, requested: parsed.data.repositoryIds.length });
     });
 
@@ -161,8 +190,14 @@ export function registerAdminRoutes(app: FastifyInstance, options: AdminOptions)
       if (typeof body.organizationId !== 'string' || body.policy === undefined) return reply.code(400).send({ error: 'INVALID_REQUEST' });
       const refused = refuse(request, body.organizationId);
       if (refused) return reply.code(refused.code).send({ error: refused.error });
-      await admin.setPolicy(body.organizationId, body.policy);
-      return reply.code(204).send();
+      // Validated on the way in. A stored policy that fails its schema is treated as absent and
+      // skips every review, so accepting one here would switch reviewing off without saying so.
+      const policy = OrganizationPolicySchema.safeParse(body.policy);
+      if (!policy.success) return reply.code(400).send({ error: 'INVALID_POLICY' });
+      try {
+        await admin.setPolicy(body.organizationId, policy.data, sessionOf(request, options.sessions)!.userId);
+        return reply.code(204).send();
+      } catch (error) { return authorityRefusal(reply, error); }
     });
   }
 
@@ -206,9 +241,11 @@ export function registerAdminRoutes(app: FastifyInstance, options: AdminOptions)
       const refused = refuseRunner(request, organizationId);
       if (refused) return reply.code(refused.code).send({ error: refused.error });
       const { id } = request.params as { id: string };
-      const cancelled = await runnerAdmin.revokeEnrollment(organizationId, id);
-      // An invitation already used cannot be cancelled: revoke the runner it created instead.
-      return cancelled ? reply.code(204).send() : reply.code(409).send({ error: 'ENROLLMENT_NOT_PENDING' });
+      try {
+        const cancelled = await runnerAdmin.revokeEnrollment(organizationId, id, sessionOf(request, options.sessions)!.userId);
+        // An invitation already used cannot be cancelled: revoke the runner it created instead.
+        return cancelled ? reply.code(204).send() : reply.code(409).send({ error: 'ENROLLMENT_NOT_PENDING' });
+      } catch (error) { return authorityRefusal(reply, error); }
     });
 
     app.get('/api/runners', async (request, reply) => {
@@ -223,9 +260,11 @@ export function registerAdminRoutes(app: FastifyInstance, options: AdminOptions)
       const refused = refuseRunner(request, organizationId);
       if (refused) return reply.code(refused.code).send({ error: refused.error });
       const { id } = request.params as { id: string };
-      // Revocation cancels live leases as well as the credential, so work stops immediately.
-      await runnerAdmin.revokeRunner(organizationId, id);
-      return reply.code(204).send();
+      try {
+        // Revocation cancels live leases as well as the credential, so work stops immediately.
+        await runnerAdmin.revokeRunner(organizationId, id, sessionOf(request, options.sessions)!.userId);
+        return reply.code(204).send();
+      } catch (error) { return authorityRefusal(reply, error); }
     });
   }
 }

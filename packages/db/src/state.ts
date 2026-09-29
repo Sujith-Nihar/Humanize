@@ -3,6 +3,7 @@ import { canTransition,RunStateSchema,ReviewSnapshotSchema } from '@humanize/dom
 import type { RunState,ReviewSnapshot,ValidatedFinding,SecretStore } from '@humanize/domain';
 import { SecretCipher } from '@humanize/security';
 import { randomUUID } from 'node:crypto';
+import type pg from 'pg';
 import { Database } from './database.js';
 import { reviewRuns,findings,providerCredentials } from './schema.js';
 
@@ -32,12 +33,24 @@ export class RunStore {
 
 export class EncryptedSecretStore implements SecretStore {
   constructor(private readonly db:Database,private readonly cipher:SecretCipher,private readonly provider:string){}
-  async put(organizationId:string,plaintext:string):Promise<string> {
-    const id=randomUUID();await this.db.orm.insert(providerCredentials).values({id,organizationId,provider:this.provider,encrypted:this.cipher.encrypt(organizationId,id,plaintext)});return id;
+  async put(organizationId:string,plaintext:string,client?:Pick<pg.PoolClient,'query'>):Promise<string> {
+    const id=randomUUID();const encrypted=this.cipher.encrypt(organizationId,id,plaintext);
+    if(client)await client.query('INSERT INTO provider_credentials (id,organization_id,provider,encrypted) VALUES ($1,$2,$3,$4)',[id,organizationId,this.provider,JSON.stringify(encrypted)]);
+    else await this.db.orm.insert(providerCredentials).values({id,organizationId,provider:this.provider,encrypted});
+    return id;
   }
   async resolve(organizationId:string,reference:string):Promise<string> {
     const [row]=await this.db.orm.select().from(providerCredentials).where(and(eq(providerCredentials.organizationId,organizationId),eq(providerCredentials.id,reference)));
     if(!row||row.revokedAt||row.provider!==this.provider)throw Error('SECRET_UNAVAILABLE');return this.cipher.decrypt(organizationId,reference,row.encrypted);
   }
-  async revoke(organizationId:string,reference:string):Promise<void> {await this.db.orm.update(providerCredentials).set({revokedAt:new Date()}).where(and(eq(providerCredentials.organizationId,organizationId),eq(providerCredentials.id,reference)));}
+  async revoke(organizationId:string,reference:string,client?:Pick<pg.PoolClient,'query'>):Promise<void> {
+    if(client){await client.query('UPDATE provider_credentials SET revoked_at=now() WHERE organization_id=$1 AND id=$2',[organizationId,reference]);return;}
+    await this.db.orm.update(providerCredentials).set({revokedAt:new Date()}).where(and(eq(providerCredentials.organizationId,organizationId),eq(providerCredentials.id,reference)));
+  }
+  /** Metadata only: a stored value is never read back out through a listing (ADR-035). */
+  async list(organizationId:string):Promise<{id:string;provider:string;createdAt:string;revokedAt:string|null}[]> {
+    const rows=await this.db.pool.query<{id:string;provider:string;created_at:Date;revoked_at:Date|null}>(
+      'SELECT id,provider,created_at,revoked_at FROM provider_credentials WHERE organization_id=$1 ORDER BY created_at',[organizationId]);
+    return rows.rows.map(row=>({id:row.id,provider:row.provider,createdAt:row.created_at.toISOString(),revokedAt:row.revoked_at?.toISOString()??null}));
+  }
 }

@@ -101,9 +101,14 @@ it('revokes a credential the session may administer', async () => {
   const {app,credentials}=build();
   try{
     expect((await app.inject({method:'DELETE',url:'/api/credentials/cred-1?organizationId=org-a',headers:{cookie:session()}})).statusCode).toBe(204);
-    expect(credentials.revoke).toHaveBeenCalledWith('org-a','cred-1');
+    // The actor comes from the session, so the binding can ask GitHub about that person.
+    expect(credentials.revoke).toHaveBeenCalledWith('org-a','cred-1','user-1');
   }finally{await app.close();}
 });
+
+const validPolicy={retentionMode:'ephemeral',executionMode:'cloud',
+  reviewer:{provider:'bedrock',model:'us.anthropic.claude-haiku-4-5-20251001-v1:0',credentialRef:null},
+  verifier:{provider:'bedrock',model:'us.anthropic.claude-haiku-4-5-20251001-v1:0',credentialRef:null}};
 
 it('exposes repository enablement and policy only to a member of that organization', async () => {
   const setEnabled=vi.fn(async(_org:string,ids:readonly string[])=>[...ids]);
@@ -121,7 +126,9 @@ it('exposes repository enablement and policy only to a member of that organizati
     const enabled=await app.inject({method:'POST',url:'/api/repositories/enabled',headers:{cookie:session()},payload:{organizationId:'org-a',repositoryIds:[id],enabled:true}});
     expect(enabled.json()).toEqual({changed:[id],requested:1});
     expect((await app.inject({method:'GET',url:'/api/policy?organizationId=org-a',headers:{cookie:session()}})).json().policy).toMatchObject({executionMode:'runner'});
-    expect((await app.inject({method:'PUT',url:'/api/policy',headers:{cookie:session()},payload:{organizationId:'org-a',policy:{executionMode:'cloud'}}})).statusCode).toBe(204);
+    expect((await app.inject({method:'PUT',url:'/api/policy',headers:{cookie:session()},payload:{organizationId:'org-a',policy:validPolicy}})).statusCode).toBe(204);
+    expect(setEnabled).toHaveBeenCalledWith('org-a',[id],true,'user-1');
+    expect(setPolicy).toHaveBeenCalledWith('org-a',expect.objectContaining({executionMode:'cloud'}),'user-1');
 
     // Another organization is refused on every route, and the store is never reached.
     setEnabled.mockClear();setPolicy.mockClear();
@@ -182,7 +189,7 @@ it('cancels a pending invitation and reports one that was already used', async (
     expect((await app.inject({method:'DELETE',url:'/api/runner/enrollments/enr-1?organizationId=org-a',headers:{cookie:session()}})).json())
       .toEqual({error:'ENROLLMENT_NOT_PENDING'});
     expect((await app.inject({method:'DELETE',url:'/api/runners/run-1?organizationId=org-a',headers:{cookie:session()}})).statusCode).toBe(204);
-    expect(revokeRunner).toHaveBeenCalledWith('org-a','run-1');
+    expect(revokeRunner).toHaveBeenCalledWith('org-a','run-1','user-1');
   }finally{await app.close();}
 });
 
@@ -203,5 +210,37 @@ it('keeps runner administration inside the organization that owns it', async () 
     // Nothing reached the store, so a refusal cannot have had a side effect.
     for(const call of Object.values(runnerAdmin))expect(call).not.toHaveBeenCalled();
     expect((await app.inject({method:'GET',url:'/api/runners?organizationId=org-a'})).statusCode).toBe(401);
+  }finally{await app.close();}
+});
+
+it('refuses a policy that would silently switch reviewing off, and names authority refusals', async () => {
+  const setPolicy=vi.fn(async()=>undefined);
+  const save=vi.fn(async()=>({id:'cred-1'}));
+  const app=createApi({webhookSecret:'s',sink:{ingest:vi.fn(async()=>true)},runners:runners as never,tokens:{scopedToken:vi.fn()} as never,
+    admin:{sessions,secureCookies:false,identity:{authorizeUrl:()=>'x',exchange:vi.fn()},
+      credentials:{save,list:vi.fn(async()=>[]),revoke:vi.fn()},
+      repositories:{repositories:vi.fn(async()=>[]),setEnabled:vi.fn(async()=>[]),policy:vi.fn(async()=>null),setPolicy}}});
+  try{
+    // A stored policy that fails its schema skips every review, so it is refused on the way in.
+    for(const policy of [{executionMode:'cloud'},{...validPolicy,reviewer:{provider:'bedrock',model:'m',credentialRef:null,endpoint:'https://evil.example'}}]){
+      const response=await app.inject({method:'PUT',url:'/api/policy',headers:{cookie:session()},payload:{organizationId:'org-a',policy}});
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toEqual({error:'INVALID_POLICY'});
+    }
+    expect(setPolicy).not.toHaveBeenCalled();
+
+    // Membership let the request in; administering every enabled repository is what the
+    // store decides, and its refusals reach the caller by name (ADR-028).
+    setPolicy.mockImplementationOnce(async()=>{throw Error('FORBIDDEN');});
+    const forbidden=await app.inject({method:'PUT',url:'/api/policy',headers:{cookie:session()},payload:{organizationId:'org-a',policy:validPolicy}});
+    expect([forbidden.statusCode,forbidden.json()]).toEqual([403,{error:'NOT_AN_ADMINISTRATOR'}]);
+    save.mockImplementationOnce(async()=>{throw Error('NO_ENABLED_REPOSITORY');});
+    const empty=await app.inject({method:'POST',url:'/api/credentials',headers:{cookie:session()},payload:{organizationId:'org-a',provider:'bedrock',secret:'bedrock-api-key'}});
+    expect([empty.statusCode,empty.json()]).toEqual([409,{error:'NO_ENABLED_REPOSITORY'}]);
+    // Any other failure is a fault, answered without its text.
+    save.mockImplementationOnce(async()=>{throw Error('postgres://user:pw@db/humanize connection refused');});
+    const fault=await app.inject({method:'POST',url:'/api/credentials',headers:{cookie:session()},payload:{organizationId:'org-a',provider:'bedrock',secret:'bedrock-api-key'}});
+    expect(fault.statusCode).toBe(500);
+    expect(fault.body).not.toContain('postgres://');
   }finally{await app.close();}
 });

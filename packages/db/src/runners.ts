@@ -53,8 +53,8 @@ export class RunnerStore {
   }
 
   /** Cancels an invitation that has not been used. A consumed one is history, not a live grant. */
-  async revokeEnrollment(organizationId:string,id:string):Promise<boolean>{
-    const result=await this.db.pool.query(
+  async revokeEnrollment(organizationId:string,id:string,client?:Pick<pg.PoolClient,'query'>):Promise<boolean>{
+    const result=await (client??this.db.pool).query(
       'UPDATE runner_enrollments SET revoked_at=now() WHERE organization_id=$1 AND id=$2 AND consumed_at IS NULL AND revoked_at IS NULL',[organizationId,id]);
     return result.rowCount===1;
   }
@@ -132,8 +132,10 @@ export class RunnerStore {
       return {duplicate:false,snapshot:ReviewSnapshotSchema.parse(row.snapshot)};
     });
   }
-  async revoke(organizationId:string,runnerId:string):Promise<void>{
-    await this.db.transaction(async tx=>{await tx.query('UPDATE runners SET revoked_at=now() WHERE organization_id=$1 AND id=$2',[organizationId,runnerId]);await tx.query("UPDATE runner_leases SET state='CANCELLED',fence=fence+1 WHERE organization_id=$1 AND runner_id=$2 AND state='LEASED'",[organizationId,runnerId]);});
+  async revoke(organizationId:string,runnerId:string,client?:Pick<pg.PoolClient,'query'>):Promise<void>{
+    const run=async(tx:Pick<pg.PoolClient,'query'>)=>{await tx.query('UPDATE runners SET revoked_at=now() WHERE organization_id=$1 AND id=$2',[organizationId,runnerId]);await tx.query("UPDATE runner_leases SET state='CANCELLED',fence=fence+1 WHERE organization_id=$1 AND runner_id=$2 AND state='LEASED'",[organizationId,runnerId]);};
+    // Inside a caller's transaction both statements already commit together.
+    if(client)await run(client);else await this.db.transaction(run);
   }
   async fail(credential:string,leaseId:string,fence:number,retryable:boolean):Promise<void>{
     await this.db.transaction(async tx=>{const runner=await this.authenticated(tx,credential);const r=await tx.query("UPDATE runner_leases SET state=CASE WHEN $5 AND attempts<3 THEN 'QUEUED' ELSE 'FAILED_FINAL' END,runner_id=NULL,expires_at=NULL WHERE id=$1 AND organization_id=$2 AND runner_id=$3 AND fence=$4 AND state='LEASED' AND expires_at>now() RETURNING id",[leaseId,runner.organization_id,runner.id,fence,retryable]);if(!r.rowCount)throw Error('LEASE_LOST');});

@@ -6,6 +6,19 @@ import { organizationPolicies } from './schema.js';
 export interface RepositorySummary { id:string; owner:string; name:string; enabled:boolean; retentionMode:string; githubRepositoryId:number; }
 /** Resolves, at the moment of the write, which repositories the caller may administer. */
 export type AdminCheck=(repositoryIds:readonly string[])=>Promise<readonly string[]>;
+/** Something that can run inside a caller's transaction, or on its own when given none. */
+export type Queryable=Pick<pg.PoolClient,'query'>;
+
+/**
+ * Every change to who may administer an organization, and every write that depends on it,
+ * takes this lock. It is a transaction-scoped advisory lock rather than a row lock because the
+ * thing being protected is the enabled SET: enabling a repository that is currently disabled
+ * locks no row an organization-wide check would have read, so row locks alone would let the two
+ * interleave (ADR-028).
+ */
+async function lockAuthority(client:Queryable,organizationId:string):Promise<void> {
+  await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`humanize:organization-authority:${organizationId}`]);
+}
 
 export class AdministrationStore {
   constructor(private readonly db:Database){}
@@ -25,6 +38,7 @@ export class AdministrationStore {
   async setEnabled(organizationId:string,repositoryIds:readonly string[],enabled:boolean,check:AdminCheck):Promise<string[]> {
     if(!repositoryIds.length)return [];
     return this.db.transaction(async (tx:pg.PoolClient)=>{
+      await lockAuthority(tx,organizationId);
       const locked=await tx.query<{id:string}>(
         'SELECT id FROM repositories WHERE organization_id=$1 AND id=ANY($2::uuid[]) ORDER BY id FOR UPDATE',
         [organizationId,[...repositoryIds]]);
@@ -45,8 +59,37 @@ export class AdministrationStore {
   }
 
   /** Administrator-only settings; repository content can never reach these fields (ADR-027). */
-  async setPolicy(organizationId:string,policy:unknown):Promise<void> {
+  async setPolicy(organizationId:string,policy:unknown,client?:Queryable):Promise<void> {
+    if(client){
+      await client.query(`INSERT INTO organization_policies (organization_id,policy,version,updated_at) VALUES ($1,$2,1,now())
+        ON CONFLICT (organization_id) DO UPDATE SET policy=EXCLUDED.policy,updated_at=now(),version=organization_policies.version+1`,[organizationId,JSON.stringify(policy)]);
+      return;
+    }
     await this.db.orm.insert(organizationPolicies).values({organizationId,policy,version:1,updatedAt:new Date()})
       .onConflictDoUpdate({target:organizationPolicies.organizationId,set:{policy,updatedAt:new Date(),version:sql`${organizationPolicies.version}+1`}});
+  }
+
+  /**
+   * Runs an organization-wide write only for someone who administers EVERY enabled repository
+   * in it, of which there must be at least one (ADR-028).
+   *
+   * Installing the App does not prove anyone owns the organization, so authority is derived from
+   * the repositories themselves: whoever administers all of them may govern what applies to all
+   * of them. The check and the write share one transaction under the organization's authority
+   * lock, so the enabled set cannot change between the answer and the write, and the write sees
+   * exactly the set that was checked.
+   */
+  async asOrganizationAdmin<T>(organizationId:string,check:AdminCheck,write:(client:pg.PoolClient)=>Promise<T>):Promise<T> {
+    return this.db.transaction(async (tx:pg.PoolClient)=>{
+      await lockAuthority(tx,organizationId);
+      const enabled=await tx.query<{id:string}>('SELECT id FROM repositories WHERE organization_id=$1 AND enabled ORDER BY id',[organizationId]);
+      const ids=enabled.rows.map(row=>row.id);
+      // No enabled repository means nobody has yet shown administrator rights over anything
+      // here, so nobody may govern it yet; enabling one comes first.
+      if(!ids.length)throw Error('NO_ENABLED_REPOSITORY');
+      const permitted=new Set(await check(ids));
+      if(ids.some(id=>!permitted.has(id)))throw Error('FORBIDDEN');
+      return write(tx);
+    });
   }
 }
