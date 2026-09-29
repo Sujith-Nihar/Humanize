@@ -1,8 +1,7 @@
 # Agent handoff
 
-**Verified green on 2026-09-29** after an eleven-day gap, on commit 79cc3cd: `pnpm check` 382 unit
-tests across 47 files, `pnpm build`, and 70 integration tests across 11 files from a freshly
-created disposable database. Two environment steps were needed first and neither indicates a code
+**Verified green on 2026-09-29** on commit 8072514: `pnpm check` 405 unit tests across 50 files,
+`pnpm build`, and 74 integration tests across 11 files from a disposable database. Two environment steps were needed first and neither indicates a code
 problem: `node_modules` was absent, so `pnpm install --frozen-lockfile` is required, and the
 `humanize-postgres-1` container was stopped, so `docker compose up -d` is required before
 `pnpm test:integration`.
@@ -11,6 +10,45 @@ problem: `node_modules` was absent, so `pnpm install --frozen-lockfile` is requi
 model calls) is implemented, and its live acceptance was **measured on 2026-09-28 and not met**.
 The measurement moved the bottleneck: it is output tokens, not round trips. The next action is a
 decision on cutting output tokens (below). Stages 2 to 7 have not begun.
+
+## Session of 2026-09-29, last: a customer repository can now reach a cloud model
+
+The Bedrock adapter was live-verified on 2026-09-28, but nothing a customer did could reach it.
+Three things stood between them, and each is now its own commit.
+
+1. **`credentialRef` was hard-coded `null`** in `apps/worker`, so no administrator configuration
+   could supply a credential at all. It now lives on the reviewer and verifier profiles in
+   `OrganizationPolicySchema`, defaults to `null` so existing policies parse unchanged, and the
+   worker copies what policy chose into the snapshot. The reference names a stored credential by
+   id: no secret enters policy, a snapshot or a queue payload, and because the repository
+   configuration file is strict, repository content can never select one (ADR-027).
+2. **`dispatchReview` reported `cloud_execution_unavailable` for every cloud run.** It now
+   dispatches on the execution mode policy fixed. Neither direction crosses: a private review is
+   never handed to the cloud queue because an executor happens to be configured, and a cloud run is
+   never offered to a runner. A cloud run naming a hosted provider with no credential is refused as
+   `no_cloud_credential` rather than falling back to a local model (INV-007).
+3. **There was no cloud executor.** The review body moved unchanged out of `apps/runner` into
+   `@humanize/execution`, so the two executors cannot drift in what they inspect or refuse; the
+   runner keeps only its two refusals and binds the lease identity afterwards.
+   `apps/worker/src/cloud-worker.ts` is the new executor.
+
+Two schema and infrastructure changes were needed. `ReviewResultSchema` now holds what an executed
+review produced and `RunnerResultSchema` extends it with the lease identity, so a cloud result needs
+no synthetic lease while a runner still cannot omit its proof; stored payloads parse as either.
+`cipherFromEnvironment` reads rotation-capable keys from deployment secret management rather than
+the database (spec 26.3), and `createProvider` builds exactly the provider a profile names or
+throws, taking no customer-configured Ollama base URL (spec 26.4, SSRF).
+
+**Verified by running the built worker, not only by tests.** With `HUMANIZE_ENCRYPTION_KEYS` and the
+App credentials present it starts with `review.cloud_execute` registered; without them it logs
+`worker.no_cloud_execution` naming what is missing and registers no cloud queue, so dispatch keeps
+reporting `cloud_execution_unavailable` instead of queueing work nothing will take.
+
+**Not proven end to end.** No cloud review has run against a real pull request, because nothing yet
+creates an organization whose policy sets `executionMode: cloud` with a stored provider credential.
+That is the next step: an administrator path to store a credential and set the execution mode, then
+one live cloud run. Noted separately and affecting both executors: `review_runs` advances only
+`RECEIVED` to `QUEUED`, so the rest of the run-state machine is unused by either path.
 
 ## Session of 2026-09-29, later: where findings actually come from (ADR-042)
 
