@@ -1,6 +1,9 @@
 import type { FileDiff } from '@humanize/domain';
 export { verifyWebhook,normalizeWebhook,eventIntent } from './webhook.js';
 export { GitHubTokenBroker,githubClient } from './client.js';
+export type { TokenRole } from './client.js';
+export { GitHubIdentity,githubAdminCheck } from './identity.js';
+export type { CoordinateLookup,MetadataTransport,OAuthApp,OrganizationDirectory,RepositoryCoordinates,UserTransport } from './identity.js';
 export { GitHubFileSource,MAX_TRUSTED_FILE_BYTES } from './files.js';
 export type { TrustedFileRequest } from './files.js';
 
