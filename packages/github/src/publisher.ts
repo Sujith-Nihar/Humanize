@@ -78,12 +78,18 @@ export function commentableLine(finding:PublishableFinding,diff:DiffMap):number|
   return null;
 }
 
-export function renderSummary(input:{inline:PublishableFinding[];summary:PublishableFinding[];unplaced:PublishableFinding[];reviewedNodes:number}):string {
+const pieces=(count:number):string=>`${count} changed piece${count===1?'':'s'}`;
+
+export function renderSummary(input:{inline:PublishableFinding[];summary:PublishableFinding[];unplaced:PublishableFinding[];reviewedNodes:number;notReviewed?:number}):string {
   const lines=[REVIEW_MARKER,'## Humanize content review',''];
   const total=input.inline.length+input.summary.length+input.unplaced.length;
+  const skipped=input.notReviewed??0;
   lines.push(total
-    ? `Reviewed ${input.reviewedNodes} changed piece${input.reviewedNodes===1?'':'s'} of user-visible content and raised ${total} observation${total===1?'':'s'}.`
-    : `Reviewed ${input.reviewedNodes} changed piece${input.reviewedNodes===1?'':'s'} of user-visible content. Nothing to flag.`);
+    ? `Reviewed ${pieces(input.reviewedNodes)} of user-visible content and raised ${total} observation${total===1?'':'s'}.`
+    // "Nothing to flag" is only true of what was read; a partial review must not read as a clean one.
+    : skipped?`Reviewed ${pieces(input.reviewedNodes)} of user-visible content and found nothing to flag in them.`
+    : `Reviewed ${pieces(input.reviewedNodes)} of user-visible content. Nothing to flag.`);
+  if(skipped)lines.push('',`**Partial review:** ${pieces(skipped)} of user-visible content ${skipped===1?'was':'were'} not reviewed, because this pull request changes more than one review covers. Content a configured rule applies to was reviewed first.`);
   // Humanize reports writing problems; it never claims to know how the text was produced.
   if(total)lines.push('','These are observations about the writing, not claims about how it was produced.');
   const extra=[...input.summary,...input.unplaced];
@@ -99,7 +105,7 @@ export function renderSummary(input:{inline:PublishableFinding[];summary:Publish
  * Builds the review. Findings whose line is not part of the diff cannot be commented on
  * inline, so they move to the summary rather than being attached to an unrelated line.
  */
-export function buildReview(input:{inline:PublishableFinding[];summary:PublishableFinding[];diff:DiffMap;reviewedNodes:number}):ReviewPayload {
+export function buildReview(input:{inline:PublishableFinding[];summary:PublishableFinding[];diff:DiffMap;reviewedNodes:number;notReviewed?:number}):ReviewPayload {
   const comments:ReviewComment[]=[];
   const unplaced:PublishableFinding[]=[];
   for(const finding of input.inline){
@@ -114,9 +120,13 @@ export function buildReview(input:{inline:PublishableFinding[];summary:Publishab
  * Check conclusion. Subjective findings are advisory by default and must never fail a build;
  * only a deterministic rule the customer configured can do that (ADR-017).
  */
-export function buildCheck(findings:readonly PublishableFinding[]):CheckPayload {
+export function buildCheck(findings:readonly PublishableFinding[],coverage:{notReviewed?:number}={}):CheckPayload {
   const blocking=findings.filter(finding=>finding.blocking);
   if(blocking.length)return {conclusion:'failure',title:`${blocking.length} policy violation${blocking.length===1?'':'s'}`,summary:'Content violates a configured blocking rule.'};
+  // Never "no issues found" for content that was not read: success would claim more than was checked.
+  const skipped=coverage.notReviewed??0;
+  if(skipped)return {conclusion:'neutral',title:`Partially reviewed: ${pieces(skipped)} not reviewed`,
+    summary:`${findings.length} observation${findings.length===1?'':'s'} in the content that was reviewed. The rest exceeded the per-review limit and was not checked.`};
   if(findings.length)return {conclusion:'neutral',title:`${findings.length} content observation${findings.length===1?'':'s'}`,summary:'Advisory content review feedback; nothing blocks this pull request.'};
   return {conclusion:'success',title:'No content issues found',summary:'No review-worthy content problems were found in the changed user-visible content.'};
 }

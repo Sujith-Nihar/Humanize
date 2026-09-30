@@ -82,3 +82,15 @@ it('gives an agent the constraint, not just the complaint',()=>{
   expect(body).toContain('<details>');
   expect(body.indexOf('Em-dash tagline restating the heading')).toBeLessThan(body.indexOf('<details>'));
 });
+
+it('never reports a partial review as a clean one', () => {
+  const diff={repositoryId:'repo',baseSha:'a'.repeat(40),headSha:'b'.repeat(40),mergeBaseSha:'a'.repeat(40),files:[]};
+  // A complete review with nothing found is a success, as before.
+  expect(buildCheck([]).conclusion).toBe('success');
+  expect(buildReview({inline:[],summary:[],diff,reviewedNodes:3}).body).toContain('Nothing to flag.');
+  // A partial one is neutral, and its summary names what was left out.
+  expect(buildCheck([],{notReviewed:1}).conclusion).toBe('neutral');
+  const partial=buildReview({inline:[],summary:[],diff,reviewedNodes:200,notReviewed:1}).body;
+  expect(partial).not.toContain('Nothing to flag.');
+  expect(partial).toContain('1 changed piece of user-visible content was not reviewed');
+});

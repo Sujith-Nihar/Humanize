@@ -18,6 +18,9 @@ import { snapshotDigest } from '@humanize/domain';
  * created. An executor that took them from its own configuration could review differently from
  * what the customer set, and did (ADR-043).
  */
+/** Reported, never silent: changed content left out because a review reached its limit. */
+export const COVERAGE_CODE='CHANGED_NODES_NOT_REVIEWED';
+
 export interface ExecutionConfig {
   maxFileBytes?:number;
   workspaceRoot?:string;
@@ -108,8 +111,15 @@ export async function executeReview(
     }
 
     const index=new EphemeralContextIndex(snapshot,nodes);
-    const rulesFor=configuredRules(scope);
-    const changed=nodes.filter(node=>{
+    // Rules are evaluated once per node: selection needs them, and so does the review.
+    const signalsByNode=new Map<string,NodeSignal[]>();
+    const rulesOf=(node:ContentNode):NodeSignal[]=>{
+      let found=signalsByNode.get(node.id);
+      if(!found){found=configuredRules(scope)(node);signalsByNode.set(node.id,found);}
+      return found;
+    };
+    const governed=(node:ContentNode)=>rulesOf(node).some(entry=>entry.blocking||entry.standalone===true);
+    const touched=nodes.filter(node=>{
       const lines=changedByPath.get(node.filePath);
       if(!lines)return false;
       for(let line=node.startLine;line<=node.endLine;line++)if(lines.has(line))return true;
@@ -117,14 +127,20 @@ export async function executeReview(
     // A node is worth passing on when a model may review it, or when a rule the customer
     // configured applies to it regardless: a blocking rule holds even on paths where every
     // review category is switched off.
-    }).filter(node=>routeNode(node,{enabled:enabledCategories(settings(node.filePath))}).eligible
-      ||rulesFor(node).some(entry=>entry.blocking||entry.standalone===true)).slice(0,LIMITS.nodeBatch);
+    }).filter(node=>routeNode(node,{enabled:enabledCategories(settings(node.filePath))}).eligible||governed(node));
+    // One pull request may change more content than a review should take on, so there is a
+    // limit, and it is reported rather than applied in silence: the summary and the check run
+    // both say how much was left out. Content a configured rule applies to goes first, so the
+    // limit never decides whether the customer's own policy is enforced.
+    const ordered=[...touched.filter(governed),...touched.filter(node=>!governed(node))];
+    const changed=ordered.slice(0,LIMITS.changedNodesPerReview);
+    const notReviewed=ordered.length-changed.length;
 
     const outcome=await reviewNodes(snapshot,changed,{
       reviewer:ports.reviewer,reviewerModel:snapshot.reviewer.model,
       verifier:ports.verifier,verifierModel:snapshot.verifier.model,
       context:async node=>(await buildContext({node,index})).evidence,
-      rules:rulesFor,
+      rules:rulesOf,
     },{
       enabled:enabledCategories(scope.settings),minimumSeverity:scope.settings.minimumSeverity,
       scopeFor:node=>{const found=settings(node.filePath);return {enabled:enabledCategories(found),minimumSeverity:found.minimumSeverity};},
@@ -168,7 +184,9 @@ export async function executeReview(
         })),
         evidence:[...evidence.values()],
         verification:{results:[]},
-        diagnostics:[...diagnostics.entries()].map(([code,count])=>({code:code.slice(0,100),count})).slice(0,100),
+        // Coverage goes first, so the diagnostics cap can never be what hides that content went unreviewed.
+        diagnostics:[...(notReviewed?[{code:COVERAGE_CODE,count:notReviewed}]:[]),
+          ...[...diagnostics.entries()].map(([code,count])=>({code:code.slice(0,100),count}))].slice(0,100),
       },
     };
   },config.workspaceRoot);

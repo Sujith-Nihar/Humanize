@@ -7,9 +7,9 @@ import { promisify } from 'node:util';
 import {validateRunnerResult,DEFAULT_REVIEW_SCOPE } from '@humanize/domain';
 import type { ModelProvider,ReviewSnapshot } from '@humanize/domain';
 import { executeReview } from './src/executor.js';
-import { configuredRules } from '@humanize/execution';
+import { COVERAGE_CODE,configuredRules } from '@humanize/execution';
 import { findingsFromResult,planPublication } from '@humanize/review';
-import { buildCheck } from '@humanize/github';
+import { buildCheck,buildReview } from '@humanize/github';
 import type { Lease,LeaseCredential } from './src/client.js';
 
 const run=promisify(execFile);
@@ -206,5 +206,43 @@ it('reviews with the settings the snapshot carries, not with defaults of its own
     expect(findings.filter(finding=>finding.blocking).map(finding=>finding.exactText)).toEqual(['100% secure']);
     const plan=planPublication(findings,{maxSubjectiveInline:review.settings.maxSubjectiveInline});
     expect(buildCheck([...plan.inline,...plan.summary]).conclusion).toBe('failure');
+  }finally{await rm(repo,{recursive:true,force:true});}
+}, 120000);
+
+it('reports changed content beyond the review limit instead of dropping it in silence', async () => {
+  // The defect this guards against: the per-call batch size (20) was applied to the whole pull
+  // request, so every changed node after the twentieth was skipped with nothing reporting it.
+  const repo=await mkdtemp(join(tmpdir(),'humanize-limit-'));
+  const git=(...args:string[])=>run('git',['-C',repo,...args]);
+  try{
+    await run('git',['init','-q','-b','main',repo]);
+    await git('config','user.email','fixture@example.com');await git('config','user.name','Fixture');
+    await writeFile(join(repo,'NOTES.md'),'Placeholder.\n');
+    await git('add','.');await git('commit','-qm','base');
+    const base=(await git('rev-parse','HEAD')).stdout.trim();
+    // 205 changed paragraphs; the one a blocking rule applies to comes last, where a plain cut
+    // at the limit would lose it.
+    const paragraphs=Array.from({length:204},(_,index)=>`Release note number ${index} describes a small change to the settings screen.`);
+    await writeFile(join(repo,'NOTES.md'),[...paragraphs,'This build is 100% secure for every customer.'].join('\n\n')+'\n');
+    await git('add','.');await git('commit','-qm','head');
+    const head=(await git('rev-parse','HEAD')).stdout.trim();
+
+    const quiet={id:'ollama',testConnection:vi.fn(),generateStructured:vi.fn(async(args:{system:string})=>
+      ({data:args.system.startsWith('You review')?{candidates:[],searches:[]}:{results:[]},provider:'ollama',model:'fixture',durationMs:1}))} as unknown as ModelProvider;
+    const review={settings:{...DEFAULT_REVIEW_SCOPE.settings,blockingRules:[{type:'forbidden_phrase' as const,phrase:'100% secure'}]},overrides:[]};
+    const job={...lease(),snapshot:{...snapshot(),baseSha:base,headSha:head,review}};
+    const report=await fromLocalOrigin(async()=>executeReview(job,{...credential(),headSha:head},{provider:quiet},{workspaceRoot}),repo) as Awaited<ReturnType<typeof executeReview>>;
+
+    expect(report.result.nodes).toHaveLength(200);
+    // The customer's rule is enforced even though its paragraph was the last one changed.
+    expect(report.result.nodes.some(node=>node.text.includes('100% secure'))).toBe(true);
+    expect(report.result.candidates.map(candidate=>candidate.exactText)).toEqual(['100% secure']);
+    // The shortfall is reported, and reported first, so no cap on diagnostics can hide it.
+    expect(report.result.diagnostics[0]).toEqual({code:COVERAGE_CODE,count:5});
+
+    // Publication says so rather than implying the whole pull request was read.
+    const published=buildReview({inline:[],summary:[],diff:{repositoryId:'repo',baseSha:base,headSha:head,mergeBaseSha:base,files:[]},reviewedNodes:200,notReviewed:5});
+    expect(published.body).toContain('**Partial review:** 5 changed pieces of user-visible content were not reviewed');
+    expect(buildCheck([],{notReviewed:5})).toMatchObject({conclusion:'neutral',title:'Partially reviewed: 5 changed pieces not reviewed'});
   }finally{await rm(repo,{recursive:true,force:true});}
 }, 120000);

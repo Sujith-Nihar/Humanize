@@ -45,3 +45,5 @@ Upstream ADR-001 through ADR-020 remain authoritative in [specification §3](../
 - [ADR-042: Separate reviewer and verifier confidence thresholds](ADR-042.md) — accepted, affects P1-S08/P1-S13
 
 - [ADR-043: What crosses the boundary between execution and publication](ADR-043.md) — accepted, resolves audit B1-B3; affects P1-S07-T05, P1-S08-T01/T03/T04
+
+- [ADR-044: A reported limit on changed content per review](ADR-044.md) — accepted, resolves audit B5; affects P1-S19-T03, P1-S08-T04

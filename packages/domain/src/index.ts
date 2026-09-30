@@ -154,7 +154,7 @@ export interface RetrievalPort { search(query:RetrievalQuery):Promise<EvidenceRe
 export interface SecretStore { put(organizationId:string, plaintext:string):Promise<string>; resolve(organizationId:string,reference:string):Promise<string>; revoke(organizationId:string,reference:string):Promise<void>; }
 export const Classification = z.enum(['SUPPORTED_CONTENT','POSSIBLE_CONTENT','NON_CONTENT_SOURCE','GENERATED','DEPENDENCY','BINARY','TOO_LARGE','IGNORED_BY_CONFIG','UNKNOWN']);
 export interface InventoryEntry { path:string; blobSha:string; mode:string; size?:number|undefined; classification:z.infer<typeof Classification>; }
-export const LIMITS = Object.freeze({fileBytes:1024*1024,nodeChars:10000,parserMs:5000,parserMemoryMb:256,fileBatch:200,nodeBatch:20,nodesPerFile:2000,contextTokens:12000,outputTokens:4000,jobMs:30*60*1000,workspaceBytes:4*1024*1024*1024,subjectiveInline:LIMITS_SUBJECTIVE_INLINE,expansionQueries:3});
+export const LIMITS = Object.freeze({fileBytes:1024*1024,nodeChars:10000,parserMs:5000,parserMemoryMb:256,fileBatch:200,nodeBatch:20,changedNodesPerReview:200,nodesPerFile:2000,contextTokens:12000,outputTokens:4000,jobMs:30*60*1000,workspaceBytes:4*1024*1024*1024,subjectiveInline:LIMITS_SUBJECTIVE_INLINE,expansionQueries:3});
 export const GitHubEventSchema=z.object({
   event:z.enum(['installation','installation_repositories','pull_request','push','check_run']),action:z.string().max(100),
   installationId:z.number().int().positive(),accountId:z.number().int().positive(),accountLogin:z.string().max(100),

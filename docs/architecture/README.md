@@ -36,6 +36,6 @@ Configuration precedence: hard invariants, organization policy, trusted-base rep
 
 ## Limits
 
-Initial limits: 1 MiB/file, 10,000 UTF-16 units/node, 5 seconds/parser, 256 MiB/parser worker, 200 files/batch, 20 nodes/model batch, at most 12,000 input and 4,000 output tokens constrained by model capability, 30 minutes/job and 4 GiB/workspace. Limits produce explicit partial/incomplete coverage, never silent success.
+Initial limits: 1 MiB/file, 10,000 UTF-16 units/node, 5 seconds/parser, 256 MiB/parser worker, 200 files/batch, 20 nodes/model batch, 200 changed nodes/review (reported in the summary and check run when exceeded, rule-governed content first), at most 12,000 input and 4,000 output tokens constrained by model capability, 30 minutes/job and 4 GiB/workspace. Limits produce explicit partial/incomplete coverage, never silent success.
 
 See [data lifecycle](data.md), [providers](providers.md), [runner](runner.md), [GitHub](github.md), [security](../security/README.md), and [concern dispositions](concerns.md).

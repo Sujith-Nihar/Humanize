@@ -12,9 +12,10 @@ six blockers that sit between components each tested alone. **B1, B2 and B3 are 
 the resolved review settings, and publication recomputes rule findings itself. Each fix has a test
 at the executor boundary where the defect lived, and each was checked by reverting it. **B4 and M2 are
 also fixed**: acceptance and scheduling commit in one transaction, and a publication retry finishes
-the work rather than posting a second check run or review. **Next is B5**: only the first 20
-changed nodes are reviewed, silently. Then M1 (inline comments pile up across pushes) and M5/M7
-(limits). The audit's repair order continues from there.
+the work rather than posting a second check run or review. **B5 is fixed** (ADR-044): up to 200
+changed nodes per review, rule-governed first, with any shortfall stated in the summary and check.
+**Next is M1** (inline comments pile up across pushes), then M5/M7 (context budget and unenforced
+limits), then B6 (repository discovery). The audit's repair order continues from there.
 
 **The production review plan is in [plan-production-review.md](plan-production-review.md).** Stage 1 (batching
 model calls) is implemented, and its live acceptance was **measured on 2026-09-28 and not met**.

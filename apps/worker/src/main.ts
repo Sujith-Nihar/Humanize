@@ -6,7 +6,7 @@ import type { ReviewSnapshot } from '@humanize/domain';
 import { GitHubFileSource,GitHubTokenBroker,ReviewPublisher,StaleHeadError,buildCheck,buildReview,fetchDiffMap,githubClient } from '@humanize/github';
 import { createProvider } from '@humanize/providers';
 import { cipherFromEnvironment } from '@humanize/security';
-import { configuredRules,executeReview } from '@humanize/execution';
+import { COVERAGE_CODE,configuredRules,executeReview } from '@humanize/execution';
 import { executeCloudReview } from './cloud-worker.js';
 import { attachSuggestions,findingsFromResult,planPublication } from '@humanize/review';
 import { handleGitHubEvent } from './handlers.js';
@@ -167,8 +167,10 @@ await queue.work('review.publish',async payload=>{
         : {attached:0,refused:{}};
       // The inline budget the administrator and repository settled on, never the product default.
       const plan=planPublication(findings,{maxSubjectiveInline:snapshot.review.settings.maxSubjectiveInline});
-      const review=buildReview({inline:plan.inline,summary:plan.summary,diff,reviewedNodes:result.nodes.length});
-      const check=buildCheck([...plan.inline,...plan.summary]);
+      // Coverage the executor reports is surfaced, never swallowed: a partial review says so.
+      const notReviewed=result.diagnostics.find(diagnostic=>diagnostic.code===COVERAGE_CODE)?.count??0;
+      const review=buildReview({inline:plan.inline,summary:plan.summary,diff,reviewedNodes:result.nodes.length,notReviewed});
+      const check=buildCheck([...plan.inline,...plan.summary],{notReviewed});
       try{
         const posted=await new ReviewPublisher(transport).publish(
           {owner:snapshot.owner,repo:snapshot.repository,pullNumber:snapshot.pullNumber,headSha:snapshot.headSha,runId:result.runId},
